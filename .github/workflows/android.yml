@@ -10,28 +10,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repository
+      # 🧩 Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup JDK for Gradle
-      - name: Set up JDK 17
+      # ☕ Setup Java
+      - name: Setup JDK 17
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: 17
 
-      # 3️⃣ Setup Android SDK
+      # 🤖 Setup Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
 
-      # 4️⃣ Extract ZIP
+      # 📦 Extract ZIP
       - name: Extract project ZIP
         id: extract
         run: |
           echo "📦 Extracting GitSafe.zip..."
           unzip -q GitSafe.zip -d extracted-project
-
           echo "🔍 Searching for Gradle settings..."
           ROOT=$(find extracted-project -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -exec dirname {} \; | head -n1)
 
@@ -44,18 +43,24 @@ jobs:
           echo "✅ Found Gradle root: $ROOT"
           echo "root=$ROOT" >> $GITHUB_OUTPUT
 
-      # 5️⃣ Ensure gradlew exists
-      - name: Ensure Gradle wrapper exists
+      # ⚙️ Recreate gradlew safely
+      - name: Ensure Gradle Wrapper
         run: |
           cd "${{ steps.extract.outputs.root }}"
+          echo "📁 Current path: $(pwd)"
+
           if [ ! -f "gradlew" ]; then
-            echo "⚠️ gradlew missing, generating..."
-            gradle wrapper
+            echo "⚠️ gradlew missing — generating fresh wrapper..."
+            apt-get update && apt-get install -y gradle
+            gradle wrapper --gradle-version 8.7
           fi
+
           chmod +x gradlew
+          echo "✅ gradlew ready:"
+          ls -l gradlew
         shell: bash
 
-      # 6️⃣ Build debug APK
+      # 🚀 Build the APK
       - name: Build Debug APK
         run: |
           cd "${{ steps.extract.outputs.root }}"
@@ -63,7 +68,7 @@ jobs:
           ./gradlew clean assembleDebug --stacktrace --info
         shell: bash
 
-      # 7️⃣ Upload artifact
+      # 📤 Upload APK Artifact
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
