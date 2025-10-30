@@ -1,0 +1,21 @@
+name: Quick Debug
+on: [push]
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Check what files exist
+      run: |
+        echo "=== CURRENT DIRECTORY ==="
+        pwd
+        ls -la
+        echo "=== ZIP FILE EXISTS? ==="
+        if [ -f "GitSafe.zip" ]; then
+          echo "✅ GitSafe.zip exists"
+          ls -lh GitSafe.zip
+          echo "=== ZIP CONTENTS ==="
+          unzip -l GitSafe.zip
+        else
+          echo "❌ GitSafe.zip NOT FOUND"
+        fi
