@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android Debug APK
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ☕ Setup Java
+      # ☕ Setup JDK
       - name: Setup JDK 17
         uses: actions/setup-java@v3
         with:
@@ -25,17 +25,18 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
 
-      # 📦 Extract ZIP
+      # 📦 Extract your ZIP
       - name: Extract project ZIP
         id: extract
         run: |
           echo "📦 Extracting GitSafe.zip..."
           unzip -q GitSafe.zip -d extracted-project
-          echo "🔍 Searching for Gradle settings..."
+
+          echo "🔍 Locating Gradle project root..."
           ROOT=$(find extracted-project -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -exec dirname {} \; | head -n1)
 
           if [ -z "$ROOT" ]; then
-            echo "❌ Could not find Gradle project root."
+            echo "❌ No Gradle settings file found. Project structure invalid."
             ls -R extracted-project
             exit 1
           fi
@@ -43,24 +44,21 @@ jobs:
           echo "✅ Found Gradle root: $ROOT"
           echo "root=$ROOT" >> $GITHUB_OUTPUT
 
-      # ⚙️ Recreate gradlew safely
+      # ⚙️ Make sure gradlew exists
       - name: Ensure Gradle Wrapper
         run: |
           cd "${{ steps.extract.outputs.root }}"
-          echo "📁 Current path: $(pwd)"
-
-          if [ ! -f "gradlew" ]; then
-            echo "⚠️ gradlew missing — generating fresh wrapper..."
+          echo "📁 In $(pwd)"
+          if [ ! -f gradlew ]; then
+            echo "⚠️ gradlew not found — installing Gradle and generating wrapper..."
             apt-get update && apt-get install -y gradle
             gradle wrapper --gradle-version 8.7
           fi
-
           chmod +x gradlew
-          echo "✅ gradlew ready:"
-          ls -l gradlew
+          echo "✅ gradlew ready"
         shell: bash
 
-      # 🚀 Build the APK
+      # 🚀 Build debug APK
       - name: Build Debug APK
         run: |
           cd "${{ steps.extract.outputs.root }}"
@@ -68,10 +66,10 @@ jobs:
           ./gradlew clean assembleDebug --stacktrace --info
         shell: bash
 
-      # 📤 Upload APK Artifact
+      # 📤 Upload built APK
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: DeskChatApp-debug
+          name: DeskChatApp-Debug
           path: |
             ${{ steps.extract.outputs.root }}/app/build/outputs/apk/debug/*.apk
