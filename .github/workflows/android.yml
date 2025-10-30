@@ -1,74 +1,81 @@
-name: Android CI - DeskChat
+name: Build APK from ZIP
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build and Debug APK
     runs-on: ubuntu-latest
-
     steps:
-      - name: 🧩 Checkout Repository
+      - name: 🧩 Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🔧 Set up JDK 17
+      - name: 🔍 List repo structure before unzip
+        run: ls -R
+
+      - name: 📦 Unzip project (if exists)
+        run: |
+          mkdir -p workspace
+          ZIPFILE=$(find . -name "*.zip" | head -n 1 || true)
+          if [ -f "$ZIPFILE" ]; then
+            echo "Found zip file: $ZIPFILE"
+            unzip -q "$ZIPFILE" -d workspace
+          else
+            echo "⚠️ No zip file found"
+          fi
+          echo "Contents after unzip:"
+          ls -R workspace || true
+
+      - name: 🧠 Detect Android project root
+        id: detect
+        run: |
+          ROOT=$(find workspace -name "settings.gradle*" -exec dirname {} \; | head -n 1)
+          echo "root=$ROOT" >> $GITHUB_OUTPUT
+          echo "Detected project root: $ROOT"
+
+      - name: ☕ Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: 17
           cache: gradle
-          # 👇 This tells setup-java to look inside GitSafe/
-          working-directory: GitSafe
 
-      - name: 🗂️ Verify Gradle Files
+      - name: 🧾 Make Gradle wrapper executable
+        run: chmod +x ${{ steps.detect.outputs.root }}/gradlew
+
+      - name: 🧱 Build Debug APK (with full logs)
+        working-directory: ${{ steps.detect.outputs.root }}
         run: |
-          echo "🔍 Checking contents of GitSafe/"
-          ls -al GitSafe
-          echo "🔍 Gradle files:"
-          find GitSafe -name "*.gradle*" || echo "⚠️ No Gradle files found"
-
-      - name: 🗂️ Make Gradle Wrapper Executable
-        run: chmod +x GitSafe/gradlew
-
-      - name: 🏗️ Build Debug APK (Full Logs)
-        working-directory: GitSafe
-        run: |
-          echo "🚀 Starting Gradle Debug Build..."
           ./gradlew clean assembleDebug --stacktrace --info --warning-mode=all
 
       - name: 📦 Upload Debug APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: DeskChat-Debug-APK
-          path: GitSafe/app/build/outputs/apk/debug/*.apk
+          path: |
+            ${{ steps.detect.outputs.root }}/app/build/outputs/apk/debug/*.apk
 
-      - name: 🔒 Attempt Release Build
-        working-directory: GitSafe
+      - name: 🧱 Build Release APK (optional)
+        working-directory: ${{ steps.detect.outputs.root }}
         run: |
-          ./gradlew assembleRelease --stacktrace --info --warning-mode=all || echo "⚠️ Release build skipped"
-        continue-on-error: true
+          ./gradlew assembleRelease --stacktrace --info --warning-mode=all || echo "⚠️ Release skipped"
 
       - name: 📤 Upload Release APK
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: DeskChat-Release-APK
-          path: GitSafe/app/build/outputs/apk/release/*.apk
-          retention-days: 7
+          path: |
+            ${{ steps.detect.outputs.root }}/app/build/outputs/apk/release/*.apk
+          retention-days: 5
 
-      - name: 🧾 Upload Gradle Logs
+      - name: 🧩 Save Logs
         if: always()
         run: |
           mkdir -p logs
-          cp -r GitSafe/build/reports logs/ || true
+          cp -r ${{ steps.detect.outputs.root }}/build/reports logs/ || true
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-debug-logs
+          name: gradle-logs
           path: logs
-          retention-days: 3
