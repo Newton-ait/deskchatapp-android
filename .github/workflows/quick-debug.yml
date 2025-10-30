@@ -1,21 +1,15 @@
-name: Quick Debug
-on: [push]
-jobs:
-  debug:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Check what files exist
-      run: |
-        echo "=== CURRENT DIRECTORY ==="
-        pwd
-        ls -la
-        echo "=== ZIP FILE EXISTS? ==="
-        if [ -f "GitSafe.zip" ]; then
-          echo "✅ GitSafe.zip exists"
-          ls -lh GitSafe.zip
-          echo "=== ZIP CONTENTS ==="
-          unzip -l GitSafe.zip
-        else
-          echo "❌ GitSafe.zip NOT FOUND"
-        fi
+- name: Extract project ZIP
+  run: |
+    unzip GitSafe.zip -d extracted-project
+    echo "✅ Extracted project structure:"
+    ls -R extracted-project
+
+- name: Build Debug APK (with full logs)
+  run: |
+    cd extracted-project/GitSafe || (echo "❌ GitSafe directory not found!" && exit 1)
+    echo "📍 Working directory:" && pwd
+    echo "🔧 Making gradlew executable..."
+    chmod +x gradlew
+    echo "🚀 Running Gradle in full debug mode..."
+    ./gradlew clean assembleDebug --stacktrace --info --debug | tee gradle_debug.log
+    echo "✅ Build finished (or failed), debug log saved to gradle_debug.log"
