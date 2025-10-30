@@ -5,14 +5,15 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build APK
+    name: Build and Debug APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🧩 Checkout repository
+      - name: 🧩 Checkout Repository
         uses: actions/checkout@v4
 
       - name: 🔧 Set up JDK 17
@@ -22,31 +23,50 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: 🗂️ Set working directory
-        run: cd GitSafe
+      - name: 🧱 Verify project structure
+        run: |
+          echo "🔍 Checking project root contents:"
+          ls -al
+          echo "🔍 Searching for Gradle files:"
+          find . -name "build.gradle*" || echo "⚠️ No Gradle files found"
 
-      - name: 🔑 Grant execute permission for Gradle wrapper
+      - name: 🗂️ Grant execute permission for Gradle wrapper
         run: chmod +x GitSafe/gradlew
 
-      - name: 🏗️ Build Debug APK
+      - name: 🏗️ Build Debug APK (Full Logs)
         run: |
+          echo "🚀 Starting debug build inside GitSafe/"
           cd GitSafe
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew clean assembleDebug --stacktrace --info --warning-mode=all
 
       - name: 📦 Upload Debug APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: DeskChat-Debug-APK
           path: GitSafe/app/build/outputs/apk/debug/*.apk
 
-      - name: 🔒 Build Release APK (if signing is configured)
+      - name: 🔒 Try Building Release APK (optional)
         run: |
           cd GitSafe
-          ./gradlew assembleRelease --stacktrace || echo "Release build skipped (no signing config)"
+          ./gradlew assembleRelease --stacktrace --info --warning-mode=all || echo "⚠️ Release build skipped (no signing config)"
+        continue-on-error: true
 
-      - name: 📤 Upload Release APK
-        if: success() || always()
+      - name: 📤 Upload Release APK (if any)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: DeskChat-Release-APK
           path: GitSafe/app/build/outputs/apk/release/*.apk
+          retention-days: 7
+
+      - name: 🧾 Upload Gradle Logs
+        if: always()
+        run: |
+          mkdir -p logs
+          cp -r GitSafe/build/reports logs/ || true
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-debug-logs
+          path: logs
+          retention-days: 3
