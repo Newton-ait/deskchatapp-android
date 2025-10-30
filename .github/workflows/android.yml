@@ -1,4 +1,4 @@
-name: Build APK from ZIP
+name: Build Android APK
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Java for Gradle
+      # 2️⃣ Setup JDK for Gradle
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
@@ -25,18 +25,18 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
 
-      # 4️⃣ Extract uploaded ZIP
+      # 4️⃣ Extract ZIP
       - name: Extract project ZIP
         id: extract
         run: |
-          echo "Extracting ZIP..."
+          echo "📦 Extracting GitSafe.zip..."
           unzip -q GitSafe.zip -d extracted-project
 
-          echo "Finding Gradle root..."
+          echo "🔍 Searching for Gradle settings..."
           ROOT=$(find extracted-project -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -exec dirname {} \; | head -n1)
 
           if [ -z "$ROOT" ]; then
-            echo "❌ No Gradle settings file found!"
+            echo "❌ Could not find Gradle project root."
             ls -R extracted-project
             exit 1
           fi
@@ -44,18 +44,29 @@ jobs:
           echo "✅ Found Gradle root: $ROOT"
           echo "root=$ROOT" >> $GITHUB_OUTPUT
 
-      # 5️⃣ Give Gradle permission & build
+      # 5️⃣ Ensure gradlew exists
+      - name: Ensure Gradle wrapper exists
+        run: |
+          cd "${{ steps.extract.outputs.root }}"
+          if [ ! -f "gradlew" ]; then
+            echo "⚠️ gradlew missing, generating..."
+            gradle wrapper
+          fi
+          chmod +x gradlew
+        shell: bash
+
+      # 6️⃣ Build debug APK
       - name: Build Debug APK
         run: |
           cd "${{ steps.extract.outputs.root }}"
-          chmod +x gradlew || true
+          echo "🚀 Starting Gradle build..."
           ./gradlew clean assembleDebug --stacktrace --info
         shell: bash
 
-      # 6️⃣ Upload the APK as an artifact
-      - name: Upload APK
+      # 7️⃣ Upload artifact
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: DeskChatApp-APK
+          name: DeskChatApp-debug
           path: |
             ${{ steps.extract.outputs.root }}/app/build/outputs/apk/debug/*.apk
