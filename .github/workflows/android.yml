@@ -22,21 +22,23 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           cache: gradle
+          # 👇 This tells setup-java to look inside GitSafe/
+          working-directory: GitSafe
 
-      - name: 🧱 Verify project structure
+      - name: 🗂️ Verify Gradle Files
         run: |
-          echo "🔍 Checking project root contents:"
-          ls -al
-          echo "🔍 Searching for Gradle files:"
-          find . -name "build.gradle*" || echo "⚠️ No Gradle files found"
+          echo "🔍 Checking contents of GitSafe/"
+          ls -al GitSafe
+          echo "🔍 Gradle files:"
+          find GitSafe -name "*.gradle*" || echo "⚠️ No Gradle files found"
 
-      - name: 🗂️ Grant execute permission for Gradle wrapper
+      - name: 🗂️ Make Gradle Wrapper Executable
         run: chmod +x GitSafe/gradlew
 
       - name: 🏗️ Build Debug APK (Full Logs)
+        working-directory: GitSafe
         run: |
-          echo "🚀 Starting debug build inside GitSafe/"
-          cd GitSafe
+          echo "🚀 Starting Gradle Debug Build..."
           ./gradlew clean assembleDebug --stacktrace --info --warning-mode=all
 
       - name: 📦 Upload Debug APK
@@ -46,13 +48,13 @@ jobs:
           name: DeskChat-Debug-APK
           path: GitSafe/app/build/outputs/apk/debug/*.apk
 
-      - name: 🔒 Try Building Release APK (optional)
+      - name: 🔒 Attempt Release Build
+        working-directory: GitSafe
         run: |
-          cd GitSafe
-          ./gradlew assembleRelease --stacktrace --info --warning-mode=all || echo "⚠️ Release build skipped (no signing config)"
+          ./gradlew assembleRelease --stacktrace --info --warning-mode=all || echo "⚠️ Release build skipped"
         continue-on-error: true
 
-      - name: 📤 Upload Release APK (if any)
+      - name: 📤 Upload Release APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
