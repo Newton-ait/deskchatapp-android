@@ -1,0 +1,37 @@
+name: Debug ZIP Contents
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Analyze ZIP contents
+      run: |
+        echo "🔍 Analyzing GitSafe.zip..."
+        echo "ZIP file size:"
+        ls -lh GitSafe.zip
+        
+        echo "📂 Listing ZIP contents:"
+        unzip -l GitSafe.zip | head -20
+        
+        echo "📦 Extracting ZIP..."
+        unzip -q GitSafe.zip -d extracted/
+        
+        echo "📁 Full extracted structure:"
+        find extracted/ -type f -name "*.gradle" -o -name "*.kt" -o -name "*.java" -o -name "AndroidManifest.xml" -o -name "*.xml" | head -30
+        
+        echo "🏗️ Looking for build files:"
+        find extracted/ -name "build.gradle" -type f
+        find extracted/ -name "settings.gradle" -type f
+        find extracted/ -name "gradlew" -type f
+        
+        echo "📱 Looking for Android files:"
+        find extracted/ -name "AndroidManifest.xml" -type f
+        find extracted/ -name "main" -type d | head -5
