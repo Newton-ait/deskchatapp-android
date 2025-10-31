@@ -1,4 +1,4 @@
-name: Android CI (Regenerate Gradle Wrapper)
+name: Android CI (Full Build + Wrapper Fix)
 
 on:
   push:
@@ -12,43 +12,61 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout repository
       - name: 📦 Checkout repository
         uses: actions/checkout@v4
 
+      # 2️⃣ Extract your ZIP project
       - name: 🗜️ Extract project ZIP
         run: unzip -o GitSafe.zip -d extracted-project
 
+      # 3️⃣ Install dos2unix (to normalize gradlew)
+      - name: ⚙️ Install dos2unix
+        run: sudo apt-get update && sudo apt-get install -y dos2unix
+
+      # 4️⃣ Set up Java 17
       - name: ☕ Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: 🧹 Prepare gradlew script
+      # 5️⃣ Set up Android SDK
+      - name: 🧩 Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # 6️⃣ Make gradlew executable and fix line endings
+      - name: 🧹 Prepare gradlew
         run: |
           cd extracted-project
           chmod +x gradlew
           dos2unix gradlew
-          echo "gradlew file info:"
+          echo "gradlew verified:"
           file gradlew
 
-      - name: 🧩 Regenerate Gradle Wrapper JAR
+      # 7️⃣ Regenerate Gradle wrapper jar (if missing or broken)
+      - name: 🔁 Regenerate Gradle Wrapper JAR
         run: |
           cd extracted-project
-          rm -f gradle/wrapper/gradle-wrapper.jar
-          ./gradlew wrapper --gradle-version 8.7 --distribution-type all
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "⚠️ gradle-wrapper.jar missing — regenerating..."
+            ./gradlew wrapper --gradle-version 8.7 --distribution-type all
+          fi
           ls -l gradle/wrapper/
 
-      - name: 🧪 Verify Gradlew Works
+      # 8️⃣ Verify Gradle
+      - name: 🧪 Verify Gradle Version
         run: |
           cd extracted-project
           ./gradlew --version
 
-      - name: 🏗️ Build Debug APK
+      # 9️⃣ Build Debug & Release APKs
+      - name: 🏗️ Build Debug and Release APKs
         run: |
           cd extracted-project
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug assembleRelease --stacktrace
 
+      # 🔟 Upload artifacts
       - name: 📦 Upload APKs
         uses: actions/upload-artifact@v4
         with:
