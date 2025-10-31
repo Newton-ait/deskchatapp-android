@@ -8,35 +8,31 @@ on:
 
 jobs:
   build:
-    name: Build Android APKs
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set up JDK 17 (for Android Gradle)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
+          # ⛔ remove cache to avoid Gradle path check errors
+          cache: 'none'
 
-      # Make Gradlew executable
       - name: Grant execute permission for Gradlew
-        run: chmod +x ./gradlew
+        run: chmod +x ./GitSafe/gradlew
 
-      # Build debug and release APKs
-      - name: Build APKs
+      - name: Build Debug and Release APKs
+        working-directory: ./GitSafe
         run: ./gradlew clean assembleDebug assembleRelease --stacktrace
 
-      # Upload artifacts (both build variants)
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: DeskChat-APKs
           path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/release/*.apk
+            GitSafe/app/build/outputs/apk/debug/*.apk
+            GitSafe/app/build/outputs/apk/release/*.apk
