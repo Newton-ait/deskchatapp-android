@@ -12,17 +12,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout code
+      # 1️⃣ Checkout Repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Extract the uploaded ZIP
+      # 2️⃣ Extract GitSafe Project (if in ZIP)
       - name: Extract GitSafe project
         run: |
           mkdir -p extracted-project
           unzip -o GitSafe.zip -d extracted-project
-          echo "✅ Extracted project files:"
-          ls -R extracted-project | head -n 50
+          cd extracted-project/GitSafe_extracted
+          ls -R
 
       # 3️⃣ Set up JDK 17
       - name: Set up JDK 17
@@ -31,65 +31,41 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 4️⃣ Install Android SDK
-      - name: Install Android SDK
+      # 4️⃣ Set up Android SDK
+      - name: Set up Android SDK
         run: |
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          mkdir -p $ANDROID_SDK_ROOT
           sudo apt-get update
           sudo apt-get install -y wget unzip
-          mkdir -p "$HOME/android-sdk/cmdline-tools"
-          cd "$HOME/android-sdk/cmdline-tools"
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip -q commandlinetools-linux-11076708_latest.zip
-          rm commandlinetools-linux-11076708_latest.zip
-          mv cmdline-tools latest
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
-          yes | sdkmanager --licenses || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools-linux-9477386_latest.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      # 5️⃣ Detect where gradlew lives
-      - name: Detect Gradle wrapper
-        id: locate
-        run: |
-          WRAPPER_PATH=$(find extracted-project -name gradlew -type f | head -n 1)
-          if [ -z "$WRAPPER_PATH" ]; then
-            echo "❌ No gradlew file found inside extracted-project."
-            echo "Please ensure GitSafe.zip includes gradlew."
-            exit 1
-          fi
-          ROOT_DIR=$(dirname "$WRAPPER_PATH")
-          echo "✅ gradlew found at: $WRAPPER_PATH"
-          echo "project_dir=$ROOT_DIR" >> $GITHUB_OUTPUT
-
-      # 6️⃣ Make gradlew executable
+      # 5️⃣ Make Gradle Wrapper Executable
       - name: Make gradlew executable
-        run: chmod +x "${{ steps.locate.outputs.project_dir }}/gradlew"
-
-      # 7️⃣ Create local.properties to link Android SDK
-      - name: Create local.properties
         run: |
-          echo "sdk.dir=$HOME/android-sdk" > "${{ steps.locate.outputs.project_dir }}/local.properties"
-          cat "${{ steps.locate.outputs.project_dir }}/local.properties"
+          cd extracted-project/GitSafe_extracted
+          chmod +x gradlew
 
-      # 8️⃣ Build Debug APK
+      # 6️⃣ Build Debug and Release APKs
       - name: Build Debug APK
         run: |
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          cd "${{ steps.locate.outputs.project_dir }}"
+          cd extracted-project/GitSafe_extracted
           ./gradlew assembleDebug --stacktrace
 
-      # 9️⃣ Build Release APK
       - name: Build Release APK
         run: |
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          cd "${{ steps.locate.outputs.project_dir }}"
+          cd extracted-project/GitSafe_extracted
           ./gradlew assembleRelease --stacktrace
 
-      # 🔟 Upload APKs
-      - name: Upload APKs
+      # 7️⃣ Upload Build Artifacts
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: GitSafe-APKs
           path: |
-            **/app/build/outputs/apk/debug/*.apk
-            **/app/build/outputs/apk/release/*.apk
+            extracted-project/GitSafe_extracted/app/build/outputs/apk/debug/*.apk
+            extracted-project/GitSafe_extracted/app/build/outputs/apk/release/*.apk
