@@ -1,4 +1,4 @@
-name: Android CI (Auto Detect Gradle)
+name: Android CI (Auto Detect)
 
 on:
   push:
@@ -11,55 +11,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📦 Checkout repository
+      - name: 🧩 Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🧰 Setup JDK 17
+      - name: 🔧 Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: 🧩 Detect project structure
-        id: detect
+      - name: 📦 Extract project ZIP
         run: |
-          echo "🔍 Checking for project files..."
-          if [ -f "GitSafe.zip" ]; then
-            echo "🗜 Found GitSafe.zip — extracting..."
-            mkdir -p extracted-project
-            unzip -q GitSafe.zip -d extracted-project
+          echo "📦 Extracting GitSafe.zip..."
+          unzip -o GitSafe.zip -d extracted-project
+          echo "✅ Extraction complete."
+
+      - name: 📁 Detect correct build directory
+        id: find_dir
+        run: |
+          if [ -f "gradlew" ]; then
+            echo "dir=." >> $GITHUB_OUTPUT
+          elif [ -f "extracted-project/GitSafe/gradlew" ]; then
+            echo "dir=extracted-project/GitSafe" >> $GITHUB_OUTPUT
+          elif [ -f "extracted-project/gradlew" ]; then
+            echo "dir=extracted-project" >> $GITHUB_OUTPUT
+          else
+            echo "❌ gradlew not found"; exit 1
           fi
 
-          # Try to find the gradlew file
-          GRADLEW_PATH=$(find . -type f -name "gradlew" | head -n 1)
-
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "❌ ERROR: No gradlew file found in project!"
-            exit 1
-          fi
-
-          echo "✅ Found gradlew at: $GRADLEW_PATH"
-          echo "gradlew_path=$GRADLEW_PATH" >> $GITHUB_OUTPUT
-
-      - name: 🧱 Make gradlew executable
-        run: chmod +x ${{ steps.detect.outputs.gradlew_path }}
-
-      - name: ⚙️ Build Debug and Release APKs
+      - name: 🏗️ Build APK (Debug + Release)
         run: |
-          cd "$(dirname "${{ steps.detect.outputs.gradlew_path }}")"
+          cd "${{ steps.find_dir.outputs.dir }}"
+          chmod +x gradlew
           echo "🏗️ Building in $(pwd)..."
           ./gradlew clean assembleDebug assembleRelease --stacktrace
 
-      - name: 📤 Upload Debug APK
+      - name: 📤 Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: APKs
           path: |
-            **/app/build/outputs/apk/debug/*.apk
-
-      - name: 📤 Upload Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release
-          path: |
-            **/app/build/outputs/apk/release/*.apk
+            **/build/outputs/apk/**/*.apk
