@@ -40,17 +40,18 @@ jobs:
             rsync -av --exclude='extracted-project' --exclude='.git' ./ extracted-project/
           fi
 
-      # 5️⃣ Restore Gradle Wrapper (direct download)
+      # 5️⃣ Restore Gradle Wrapper JAR (official Gradle Maven binary)
       - name: Restore Gradle Wrapper JAR
         run: |
-          echo "🧩 Ensuring valid gradle-wrapper.jar..."
+          echo "🧩 Restoring official gradle-wrapper.jar..."
           mkdir -p extracted-project/gradle/wrapper
           rm -f extracted-project/gradle/wrapper/gradle-wrapper.jar
-          
-          # ✅ Download wrapper jar directly from Gradle source repo
-          wget -q https://raw.githubusercontent.com/gradle/gradle/master/gradle/wrapper/gradle-wrapper.jar -O extracted-project/gradle/wrapper/gradle-wrapper.jar
-          
-          ls -l extracted-project/gradle/wrapper
+
+          # ✅ Download from Gradle Maven repo (official binary)
+          wget -q https://repo.gradle.org/gradle/libs-releases-local/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar -O extracted-project/gradle/wrapper/gradle-wrapper.jar
+
+          echo "✅ Wrapper jar details:"
+          ls -lh extracted-project/gradle/wrapper/gradle-wrapper.jar
           file extracted-project/gradle/wrapper/gradle-wrapper.jar
 
       # 6️⃣ Make gradlew executable
@@ -67,7 +68,7 @@ jobs:
           echo "🧩 Verifying Gradle wrapper..."
           ./gradlew --version
 
-      # 8️⃣ Build APKs
+      # 8️⃣ Build Debug & Release APKs
       - name: Build Debug and Release APKs
         run: |
           cd extracted-project
@@ -75,7 +76,7 @@ jobs:
           ./gradlew assembleDebug
           ./gradlew assembleRelease
 
-      # 9️⃣ Upload APKs
+      # 9️⃣ Upload built APKs
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
@@ -83,7 +84,7 @@ jobs:
           path: |
             extracted-project/**/build/outputs/**/*.apk
 
-      # 🔟 Summary
+      # 🔟 Build summary
       - name: CI Summary
         run: |
           echo "--------------------------------------"
