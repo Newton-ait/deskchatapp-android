@@ -16,12 +16,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Extract project
+      # 2️⃣ Extract the project
       - name: Extract GitSafe project
         run: |
           mkdir -p extracted-project
           unzip -o GitSafe.zip -d extracted-project
-          ls -R extracted-project
+          ls -la extracted-project
 
       # 3️⃣ Set up JDK 17
       - name: Set up JDK 17
@@ -30,8 +30,8 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 4️⃣ Install & Configure Android SDK
-      - name: Set up Android SDK
+      # 4️⃣ Install Android SDK
+      - name: Install Android SDK
         run: |
           export ANDROID_SDK_ROOT=$HOME/android-sdk
           mkdir -p $ANDROID_SDK_ROOT
@@ -43,25 +43,28 @@ jobs:
           export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
           yes | sdkmanager --licenses
           yes | sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          echo "✅ Android SDK Installed"
+          echo "✅ Android SDK installed successfully"
 
-      # 5️⃣ Verify SDK Setup
-      - name: Verify SDK Setup
-        run: |
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
-          sdkmanager --list | head -n 20
-
-      # 6️⃣ Build Debug & Release APKs
-      - name: Build Debug & Release APKs
+      # 5️⃣ Verify gradlew script exists and is executable
+      - name: Verify gradlew
         run: |
           cd extracted-project
+          if [ ! -f gradlew ]; then
+            echo "❌ gradlew not found!"
+            exit 1
+          fi
           chmod +x gradlew
+          head -n 5 gradlew
+
+      # 6️⃣ Build Debug & Release APKs
+      - name: Build Debug and Release APKs
+        run: |
+          cd extracted-project
           ./gradlew clean
           ./gradlew assembleDebug --stacktrace
           ./gradlew assembleRelease --stacktrace
 
-      # 7️⃣ Upload APK Artifacts
+      # 7️⃣ Upload APKs as artifacts
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
