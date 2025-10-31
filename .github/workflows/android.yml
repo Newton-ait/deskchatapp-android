@@ -31,26 +31,32 @@ jobs:
       - name: Extract or prepare project
         run: |
           if [ -f deskchatapp-android.zip ]; then
-            echo "📦 Extracting project from ZIP..."
+            echo "📦 Extracting ZIP..."
             mkdir extracted-project
             unzip -q deskchatapp-android.zip -d extracted-project
           else
-            echo "📁 No zip found — copying repository to extracted-project..."
-            mkdir extracted-project
+            echo "📁 Copying repo contents..."
+            mkdir -p extracted-project
             rsync -av --exclude='extracted-project' --exclude='.git' ./ extracted-project/
           fi
 
-      # 5️⃣ Fix Gradle wrapper JAR path
-      - name: Fix Gradle wrapper structure
+      # 5️⃣ Ensure gradle wrapper folder exists and move JAR correctly
+      - name: Fix Gradle wrapper location
         run: |
+          echo "📁 Checking gradle wrapper..."
           mkdir -p extracted-project/gradle/wrapper
           if [ -f extracted-project/gradle-wrapper.jar ]; then
-            echo "📦 Moving gradle-wrapper.jar into gradle/wrapper/..."
-            mv extracted-project/gradle-wrapper.jar extracted-project/gradle/wrapper/
+            mv extracted-project/gradle-wrapper.jar extracted-project/gradle/wrapper/gradle-wrapper.jar
+            echo "✅ Moved gradle-wrapper.jar into gradle/wrapper/"
+          elif [ -f extracted-project/gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "✅ gradle-wrapper.jar already in correct place"
           else
-            echo "⚠️ gradle-wrapper.jar not found in root, skipping move."
+            echo "❌ gradle-wrapper.jar missing, trying to repair..."
+            wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O gradle.zip
+            unzip -q gradle.zip
+            cp gradle/lib/gradle-wrapper.jar extracted-project/gradle/wrapper/
           fi
-          ls -R extracted-project/gradle/wrapper || echo "⚠️ gradle/wrapper missing!"
+          ls -R extracted-project/gradle/wrapper
 
       # 6️⃣ Make gradlew executable
       - name: Make gradlew executable
@@ -59,39 +65,34 @@ jobs:
           chmod +x gradlew
           file gradlew
 
-      # 7️⃣ Build with Gradle wrapper
+      # 7️⃣ Verify Gradle Wrapper
+      - name: Verify Gradle Wrapper
+        run: |
+          cd extracted-project
+          echo "🧩 Verifying Gradle wrapper..."
+          ./gradlew --version || (echo "❌ Gradle wrapper failed"; exit 1)
+
+      # 8️⃣ Build APKs
       - name: Build Debug and Release APKs
         run: |
           cd extracted-project
-          ./gradlew --version
           ./gradlew clean
           ./gradlew assembleDebug
           ./gradlew assembleRelease
 
-      # 8️⃣ List generated APKs
-      - name: List generated APKs
-        run: |
-          echo "📱 APK files generated:"
-          find extracted-project -type f -name "*.apk" || echo "⚠️ No APKs found"
-
       # 9️⃣ Upload APKs
-      - name: Upload Debug APK
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk
-          path: extracted-project/**/build/outputs/apk/debug/*.apk
-
-      - name: Upload Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-apk
-          path: extracted-project/**/build/outputs/apk/release/*.apk
+          name: all-apks
+          path: |
+            extracted-project/**/build/outputs/**/*.apk
 
       # 🔟 Summary
-      - name: Build Summary
+      - name: CI Summary
         run: |
           echo "--------------------------------------"
-          echo "✅ Android CI Summary"
+          echo "✅ Android CI Finished"
           echo "Repository: $GITHUB_REPOSITORY"
           echo "Branch: $GITHUB_REF_NAME"
           echo "--------------------------------------"
