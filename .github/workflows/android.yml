@@ -38,54 +38,57 @@ jobs:
             mkdir -p extracted-project
             rsync -av --exclude='extracted-project' --exclude='.git' ./ extracted-project/
           fi
-          echo "✅ Extraction complete"
-          ls -R extracted-project | head -n 20
 
-      # 5️⃣ Check Gradle Wrapper
+          echo "✅ Extraction complete. Directory preview:"
+          ls -R extracted-project | head -n 50
+
+      # 5️⃣ Check Gradle Wrapper JAR
       - name: Check Gradle Wrapper
         run: |
-          cd extracted-project/GitSafe
+          cd extracted-project
           echo "🧩 Checking Gradle wrapper JAR..."
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
             echo "❌ gradle-wrapper.jar missing — restoring official copy..."
             mkdir -p gradle/wrapper
             wget -q https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar -O gradle/wrapper/gradle-wrapper.jar
           fi
+
+          echo "✅ gradle-wrapper.jar details:"
           ls -lh gradle/wrapper/gradle-wrapper.jar
           file gradle/wrapper/gradle-wrapper.jar
-          echo "✅ Gradle wrapper confirmed"
 
       # 6️⃣ Make gradlew executable
       - name: Make gradlew executable
         run: |
-          cd extracted-project/GitSafe
+          cd extracted-project
           chmod +x gradlew
           echo "✅ gradlew permissions fixed"
+          ls -lh gradlew
 
       # 7️⃣ Verify Gradle Wrapper
       - name: Verify Gradle Wrapper
         run: |
-          cd extracted-project/GitSafe
+          cd extracted-project
           echo "🧩 Verifying Gradle wrapper..."
           ./gradlew --version
 
       # 8️⃣ Build Debug & Release APKs
       - name: Build Debug and Release APKs
         run: |
-          cd extracted-project/GitSafe
+          cd extracted-project
           echo "🚀 Starting Gradle build..."
           ./gradlew clean
           ./gradlew assembleDebug
           ./gradlew assembleRelease
-          echo "✅ Build completed"
+          echo "✅ Build completed successfully"
 
-      # 9️⃣ Upload built APKs
+      # 9️⃣ Upload built APKs as CI artifacts
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: all-apks
           path: |
-            extracted-project/GitSafe/**/build/outputs/**/*.apk
+            extracted-project/**/build/outputs/**/*.apk
 
       # 🔟 CI Summary
       - name: CI Summary
