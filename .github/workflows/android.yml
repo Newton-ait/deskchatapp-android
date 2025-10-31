@@ -1,4 +1,4 @@
-name: Android CI
+name: Android Build
 
 on:
   push:
@@ -10,81 +10,89 @@ jobs:
     timeout-minutes: 10
     
     steps:
-    - name: Checkout repository
+    - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Extract and fix project
+    - name: Extract project
       run: |
-        echo "📦 Extracting and preparing project..."
-        # Clean workspace
-        find . -maxdepth 1 -type f -name "*.gradle" -delete
-        find . -maxdepth 1 -type f -name "gradlew*" -delete
+        echo "📦 Extracting GitSafe.zip..."
+        # Clean and extract
         rm -rf app gradle 2>/dev/null || true
-        
-        # Extract project
+        rm -f *.gradle gradlew* 2>/dev/null || true
         unzip -o -q GitSafe.zip
+        echo "✅ Extraction complete"
         
-        # Fix build.gradle files
-        echo "🔧 Fixing build configuration..."
-        
-        # Create fixed root build.gradle
-        cat > build.gradle << 'EOF'
-        buildscript {
-            repositories {
-                google()
-                mavenCentral()
-            }
-            dependencies {
-                classpath "com.android.tools.build:gradle:8.1.0"
-            }
-        }
-        
-        allprojects {
-            repositories {
-                google()
-                mavenCentral()
-            }
-        }
-        
-        task clean(type: Delete) {
-            delete rootProject.buildDir
-        }
-        EOF
-        
-        # Remove problematic plugins from app/build.gradle
-        if [ -f "app/build.gradle" ]; then
-          sed -i '/com.google.gms.google-services/d' app/build.gradle
-          sed -i '/apply plugin.*google-services/d' app/build.gradle
-          echo "✅ Removed Google Services plugin"
-        fi
-        
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        
-    - name: Setup Android SDK
+    - name: Setup Java and Android
       uses: android-actions/setup-android@v3
       
-    - name: Install working Gradle
+    - name: Debug project structure
       run: |
-        echo "📥 Installing Gradle 8.5..."
-        wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
-        unzip -d /opt/gradle gradle-8.5-bin.zip
-        echo "/opt/gradle/gradle-8.5/bin" >> $GITHUB_PATH
+        echo "🔍 Project Structure:"
+        echo "=== Root Files ==="
+        ls -la
+        echo "=== App build.gradle ==="
+        cat app/build.gradle || echo "No app/build.gradle"
+        echo "=== Root build.gradle ==="
+        cat build.gradle || echo "No root build.gradle"
+        echo "=== Java Source Files ==="
+        find . -name "*.java" | head -10
+        echo "📊 Java files found: $(find . -name "*.java" | wc -l)"
         
-    - name: Verify environment
+    - name: Create minimal build files
       run: |
-        echo "🔍 Environment check:"
-        java -version
-        gradle --version || echo "Gradle not in PATH yet"
-        /opt/gradle/gradle-8.5/bin/gradle --version
+        echo "🔧 Creating minimal build configuration..."
         
-    - name: Build only Debug APK
+        # Create absolute minimal root build.gradle
+        cat > build.gradle << 'EOF'
+        buildscript {
+            repositories { google(); mavenCentral() }
+            dependencies { classpath "com.android.tools.build:gradle:7.4.2" }
+        }
+        allprojects {
+            repositories { google(); mavenCentral() }
+        }
+        task clean(type: Delete) { delete rootProject.buildDir }
+        EOF
+        
+        # Create minimal app build.gradle if missing or fix existing
+        if [ -f "app/build.gradle" ]; then
+          echo "📝 Fixing existing app/build.gradle..."
+          # Remove problematic plugins
+          sed -i '/com.google.gms.google-services/d' app/build.gradle
+          sed -i '/apply plugin.*google-services/d' app/build.gradle
+          # Remove Firebase dependencies if present
+          sed -i '/com.google.firebase/d' app/build.gradle
+          sed -i '/com.google.android.gms/d' app/build.gradle
+        else
+          echo "📝 Creating new app/build.gradle..."
+          mkdir -p app
+          cat > app/build.gradle << 'EOF'
+        plugins { id 'com.android.application' }
+        android {
+            compileSdk 33
+            defaultConfig {
+                applicationId "com.gitsafe.deskchat"
+                minSdk 21
+                targetSdk 33
+                versionCode 1
+                versionName "1.0"
+            }
+            buildTypes {
+                release { minifyEnabled false }
+                debug { debuggable true }
+            }
+        }
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.9.0'
+        }
+        EOF
+        fi
+        
+    - name: Try direct Gradle build
       run: |
-        echo "🏗️ Building Debug APK..."
-        /opt/gradle/gradle-8.5/bin/gradle clean assembleDebug --no-daemon --stacktrace
+        echo "🏗️ Attempting build..."
+        gradle clean assembleDebug --no-daemon --stacktrace
         
     - name: Check for APK
       run: |
@@ -94,38 +102,36 @@ jobs:
           ls -la app/build/outputs/apk/debug/
           APK_COUNT=$(find app/build/outputs/apk/debug -name "*.apk" | wc -l)
           echo "📱 Found $APK_COUNT APK file(s)"
-          
-          # Upload specific APK files
-          echo "::set-output name=apk_exists::true"
         else
           echo "❌ No APK directory found"
-          echo "📁 Build outputs:"
-          find app/build/outputs/ -type f 2>/dev/null | head -10 || echo "No build outputs"
-          echo "::set-output name=apk_exists::false"
+          echo "📁 Available outputs:"
+          find app/build/ -type f 2>/dev/null | head -10 || echo "No build outputs"
         fi
         
-    - name: Upload APK artifacts
-      if: steps.check_apk.outputs.apk_exists == 'true'
+    - name: Upload APK if exists
       uses: actions/upload-artifact@v4
       with:
         name: deskchat-apk
         path: app/build/outputs/apk/debug/*.apk
+        if-no-files-found: ignore
         retention-days: 30
         
-    - name: Upload build logs
+    - name: Upload project structure
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: build-logs
+        name: project-analysis
         path: |
-          app/build/reports/
-          *.log
+          build.gradle
+          app/build.gradle
+          app/src/
+        if-no-files-found: ignore
         retention-days: 30
         
     - name: Build report
       run: |
-        echo "📊 Final Build Report:"
+        echo "📊 Build Report:"
         echo "📦 Source: GitSafe.zip"
-        echo "🔧 Gradle: System-installed 8.5"
-        echo "📱 Target: Debug APK only"
+        echo "🔧 Approach: Minimal build configuration"
+        echo "📱 Result: $(if [ -d "app/build/outputs/apk/debug" ]; then echo 'SUCCESS - APK generated'; else echo 'FAILED - No APK'; fi)"
         echo "✅ Process completed"
