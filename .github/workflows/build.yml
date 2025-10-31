@@ -1,40 +1,19 @@
-name: Build APK from ZIP
+android {
+    namespace "com.deskchat.app"
+    compileSdk 34
 
-on:
-  push:
-    branches: [ main, master ]
+    defaultConfig {
+        applicationId "com.deskchat.app"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Extract Android project from ZIP
-      run: |
-        echo "Extracting GitSafe.zip..."
-        unzip -q GitSafe.zip -d extracted-project/
-        echo "Contents after extraction:"
-        ls -la extracted-project/
-        
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v2
-      
-    - name: Build Android project
-      run: |
-        cd extracted-project
-        gradle assembleDebug --stacktrace --info
-      
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-apk
-        path: "extracted-project/**/build/outputs/apk/**/*.apk"
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
