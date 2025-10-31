@@ -24,31 +24,26 @@ jobs:
           unzip -o GitSafe.zip -d extracted-project
           echo "✅ Extraction complete."
 
-      # 3️⃣ Locate your project directory automatically
+      # 3️⃣ Locate your project folder (auto-detect even in nested dirs)
       - name: Locate project folder
         id: locate
         run: |
           echo "🔍 Searching for settings.gradle..."
           PROJECT_DIR=$(find extracted-project -type f -name "settings.gradle*" | head -n 1 | xargs dirname)
           if [ -z "$PROJECT_DIR" ]; then
-            echo "❌ Could not locate a Gradle project."
+            echo "❌ Could not locate a Gradle project (no settings.gradle found)."
             exit 1
           fi
-          echo "✅ Found project: $PROJECT_DIR"
+          echo "✅ Found project directory: $PROJECT_DIR"
           echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
 
-      # 🧠 NEW STEP: Static Gradle Pre-Check
+      # 🧠 Static Gradle Pre-Check
       - name: Static Gradle Configuration Pre-Check
         run: |
           cd ${{ steps.locate.outputs.project_dir }}
           echo "🧠 Running Gradle configuration pre-check..."
-
           if [ ! -f "gradlew" ]; then
-            echo "❌ Missing gradlew script!"
-            exit 1
-          fi
-          if [ ! -f "build.gradle" ] && [ ! -f "build.gradle.kts" ]; then
-            echo "❌ No root build.gradle file found!"
+            echo "❌ Missing gradlew script in $(pwd)"
             exit 1
           fi
           if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
@@ -68,20 +63,37 @@ jobs:
           distribution: 'temurin'
           java-version: 17
 
-      # 5️⃣ Verify Gradle Wrapper
+      # 5️⃣ Verify Gradle Wrapper (smart detection & safe execution)
       - name: Verify Gradle Wrapper
         run: |
           cd ${{ steps.locate.outputs.project_dir }}
           echo "🧩 Verifying Gradle wrapper..."
+          echo "📂 Current directory: $(pwd)"
+          ls -1 | head -10
+
+          # Restore wrapper jar if missing
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
             echo "⚠️ gradle-wrapper.jar missing — restoring official one..."
             mkdir -p gradle/wrapper
             curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \
               https://raw.githubusercontent.com/gradle/gradle/master/gradle/wrapper/gradle-wrapper.jar
           fi
+
+          # Ensure gradlew exists and is executable
+          if [ ! -f gradlew ]; then
+            echo "❌ gradlew script not found — attempting nested search..."
+            NESTED_GRADLEW=$(find . -type f -name "gradlew" | head -n 1)
+            if [ -z "$NESTED_GRADLEW" ]; then
+              echo "❌ No gradlew found anywhere."
+              exit 1
+            fi
+            echo "📂 Found nested gradlew at: $NESTED_GRADLEW"
+            cd "$(dirname "$NESTED_GRADLEW")"
+          fi
+
           chmod +x gradlew
-          echo "✅ Gradle Wrapper verified:"
-          ./gradlew --version
+          echo "✅ Gradle Wrapper verified — running version check..."
+          ./gradlew --version || (echo "❌ Gradle wrapper execution failed!" && exit 1)
 
       # 6️⃣ Build Debug and Release APKs
       - name: Build Debug and Release APKs
