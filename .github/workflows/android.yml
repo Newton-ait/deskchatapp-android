@@ -40,19 +40,11 @@ jobs:
             rsync -av --exclude='extracted-project' --exclude='.git' ./ extracted-project/
           fi
 
-      # 5️⃣ Restore Gradle Wrapper JAR (official Maven Central binary)
-      - name: Restore Gradle Wrapper JAR
-        run: |
-          echo "🧩 Restoring official gradle-wrapper.jar..."
-          mkdir -p extracted-project/gradle/wrapper
-          rm -f extracted-project/gradle/wrapper/gradle-wrapper.jar
-
-          # ✅ Download the official jar from Maven Central
-          wget -q https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar -O extracted-project/gradle/wrapper/gradle-wrapper.jar
-
-          echo "✅ Wrapper jar details:"
-          ls -lh extracted-project/gradle/wrapper/gradle-wrapper.jar
-          file extracted-project/gradle/wrapper/gradle-wrapper.jar
+      # 5️⃣ Set up Gradle (official action)
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.7
 
       # 6️⃣ Make gradlew executable
       - name: Make gradlew executable
