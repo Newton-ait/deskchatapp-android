@@ -16,12 +16,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Extract GitSafe Project (if in ZIP)
+      # 2️⃣ Extract GitSafe Project
       - name: Extract GitSafe project
         run: |
           mkdir -p extracted-project
           unzip -o GitSafe.zip -d extracted-project
-          cd extracted-project/GitSafe_extracted
+          cd extracted-project
           ls -R
 
       # 3️⃣ Set up JDK 17
@@ -41,24 +41,25 @@ jobs:
           wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           unzip -q commandlinetools-linux-9477386_latest.zip -d $ANDROID_SDK_ROOT/cmdline-tools
           mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+          yes | sdkmanager --licenses
+          yes | sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       # 5️⃣ Make Gradle Wrapper Executable
       - name: Make gradlew executable
         run: |
-          cd extracted-project/GitSafe_extracted
+          cd extracted-project
           chmod +x gradlew
 
       # 6️⃣ Build Debug and Release APKs
       - name: Build Debug APK
         run: |
-          cd extracted-project/GitSafe_extracted
+          cd extracted-project
           ./gradlew assembleDebug --stacktrace
 
       - name: Build Release APK
         run: |
-          cd extracted-project/GitSafe_extracted
+          cd extracted-project
           ./gradlew assembleRelease --stacktrace
 
       # 7️⃣ Upload Build Artifacts
@@ -67,5 +68,5 @@ jobs:
         with:
           name: GitSafe-APKs
           path: |
-            extracted-project/GitSafe_extracted/app/build/outputs/apk/debug/*.apk
-            extracted-project/GitSafe_extracted/app/build/outputs/apk/release/*.apk
+            extracted-project/app/build/outputs/apk/debug/*.apk
+            extracted-project/app/build/outputs/apk/release/*.apk
