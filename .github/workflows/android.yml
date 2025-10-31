@@ -33,17 +33,27 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # 5️⃣ Install Android SDK
-      - name: Install Android SDK components
+      # 5️⃣ Install Android SDK + Command-line tools
+      - name: Install Android SDK
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip
+          mkdir -p "$HOME/android-sdk/cmdline-tools"
+          cd "$HOME/android-sdk/cmdline-tools"
+          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q commandlinetools-linux-11076708_latest.zip
+          rm commandlinetools-linux-11076708_latest.zip
+          mv cmdline-tools latest
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
           yes | sdkmanager --licenses || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       # 6️⃣ Build Debug APK
       - name: Build Debug APK
         run: |
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
           cd extracted-project/GitSafe
           chmod +x ./gradlew
           ./gradlew assembleDebug --stacktrace
@@ -51,6 +61,8 @@ jobs:
       # 7️⃣ Build Release APK
       - name: Build Release APK
         run: |
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
           cd extracted-project/GitSafe
           ./gradlew assembleRelease --stacktrace
 
