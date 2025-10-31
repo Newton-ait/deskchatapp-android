@@ -87,7 +87,7 @@ jobs:
         echo "✅ Lint check complete"
         
     - name: Upload APK Artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: deskchat-apks
         path: |
