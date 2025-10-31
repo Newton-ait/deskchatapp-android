@@ -22,7 +22,7 @@ jobs:
           mkdir -p extracted-project
           unzip -o GitSafe.zip -d extracted-project
           echo "📂 Extracted structure:"
-          ls -R extracted-project | head -n 40
+          ls -R extracted-project | head -n 50
 
       # 3️⃣ Set up JDK 17
       - name: Set up JDK 17
@@ -31,18 +31,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 4️⃣ Set up Gradle
+      # 4️⃣ Set up Gradle cache
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # 5️⃣ Install Android SDK
+      # 5️⃣ Install Android SDK (command line tools)
       - name: Install Android SDK
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip
           mkdir -p "$HOME/android-sdk/cmdline-tools"
           cd "$HOME/android-sdk/cmdline-tools"
-          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q commandlinetools-linux-11076708_latest.zip
           rm commandlinetools-linux-11076708_latest.zip
           mv cmdline-tools latest
@@ -51,29 +51,39 @@ jobs:
           yes | sdkmanager --licenses || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      # 6️⃣ Locate Gradle project folder
-      - name: Locate Gradle project
+      # 6️⃣ Locate Gradle wrapper automatically
+      - name: Locate Gradle wrapper
         id: locate
         run: |
           ROOT=$(find extracted-project -name "gradlew" -type f | head -n 1)
           if [ -z "$ROOT" ]; then
-            echo "❌ No gradlew file found!"
+            echo "❌ gradlew not found. Make sure your ZIP includes it."
             exit 1
           fi
           ROOT_DIR=$(dirname "$ROOT")
-          echo "Found project at: $ROOT_DIR"
+          echo "✅ Gradle wrapper found in: $ROOT_DIR"
           echo "project_path=$ROOT_DIR" >> $GITHUB_OUTPUT
 
-      # 7️⃣ Build Debug APK
+      # 7️⃣ Ensure gradlew is executable
+      - name: Make gradlew executable
+        run: |
+          chmod +x ${{ steps.locate.outputs.project_path }}/gradlew
+
+      # 8️⃣ Create local.properties (avoid SDK errors)
+      - name: Generate local.properties
+        run: |
+          echo "sdk.dir=$HOME/android-sdk" > ${{ steps.locate.outputs.project_path }}/local.properties
+          cat ${{ steps.locate.outputs.project_path }}/local.properties
+
+      # 9️⃣ Build Debug APK
       - name: Build Debug APK
         run: |
           export ANDROID_SDK_ROOT=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
           cd ${{ steps.locate.outputs.project_path }}
-          chmod +x ./gradlew
           ./gradlew assembleDebug --stacktrace
 
-      # 8️⃣ Build Release APK
+      # 🔟 Build Release APK
       - name: Build Release APK
         run: |
           export ANDROID_SDK_ROOT=$HOME/android-sdk
@@ -81,11 +91,11 @@ jobs:
           cd ${{ steps.locate.outputs.project_path }}
           ./gradlew assembleRelease --stacktrace
 
-      # 9️⃣ Upload APKs
+      # 11️⃣ Upload APK artifacts
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: deskchat-apks
+          name: GitSafe-APKs
           path: |
             **/app/build/outputs/apk/debug/*.apk
             **/app/build/outputs/apk/release/*.apk
