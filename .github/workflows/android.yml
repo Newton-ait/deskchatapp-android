@@ -1,4 +1,4 @@
-name: Android CI (Updated Gradle Setup)
+name: Android CI (Auto-Detect ZIP)
 
 on:
   push:
@@ -20,28 +20,49 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: 📂 Extract project ZIP
+      - name: 📂 Unzip GitSafe project
         run: |
-          echo "🔍 Extracting GitSafe.zip..."
-          unzip -q GitSafe.zip -d extracted-project
+          echo "🔍 Checking for GitSafe.zip..."
+          if [ -f GitSafe.zip ]; then
+            echo "✅ Found GitSafe.zip, extracting..."
+            mkdir -p extracted-project
+            unzip -q GitSafe.zip -d extracted-project
+            echo "📁 Extracted contents:"
+            ls -R extracted-project || true
+          else
+            echo "❌ GitSafe.zip not found in repo root!"
+            exit 1
+          fi
 
-      - name: 🧭 Move to project directory
+      - name: 🧭 Detect Gradle project directory
+        id: locate
         run: |
-          cd extracted-project/GitSafe
-          ls -al
+          echo "🔍 Searching for gradlew..."
+          GRADLE_DIR=$(find extracted-project -type f -name "gradlew" -exec dirname {} \; | head -n 1)
+          if [ -z "$GRADLE_DIR" ]; then
+            echo "❌ No gradlew file found in extracted project!"
+            exit 1
+          fi
+          echo "✅ Found gradlew in: $GRADLE_DIR"
+          echo "dir=$GRADLE_DIR" >> $GITHUB_OUTPUT
 
       - name: ⚙️ Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
 
-      - name: 🏗️ Build APKs
-        working-directory: extracted-project/GitSafe
-        run: ./gradlew clean assembleDebug assembleRelease --stacktrace
+      - name: 🏗️ Build Debug and Release APKs
+        run: |
+          cd ${{ steps.locate.outputs.dir }}
+          echo "🏗️ Building inside $(pwd)"
+          chmod +x gradlew
+          ./gradlew clean assembleDebug assembleRelease --stacktrace
 
       - name: 📤 Upload APKs
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: APKs
-          path: extracted-project/GitSafe/app/build/outputs/apk/
+          name: Built-APKs
+          path: |
+            **/app/build/outputs/apk/debug/*.apk
+            **/app/build/outputs/apk/release/*.apk
