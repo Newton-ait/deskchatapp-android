@@ -12,15 +12,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repository
+      # 1️⃣ Checkout Repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Extract the project
+      # 2️⃣ Extract GitSafe project
       - name: Extract GitSafe project
         run: |
           mkdir -p extracted-project
           unzip -o GitSafe.zip -d extracted-project
+          echo "✅ Project extracted successfully"
           ls -la extracted-project
 
       # 3️⃣ Set up JDK 17
@@ -43,29 +44,31 @@ jobs:
           export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
           yes | sdkmanager --licenses
           yes | sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          echo "✅ Android SDK installed successfully"
+          echo "✅ Android SDK installed"
 
-      # 5️⃣ Verify gradlew script exists and is executable
-      - name: Verify gradlew
+      # 5️⃣ Make gradlew executable
+      - name: Prepare Gradle Wrapper
         run: |
           cd extracted-project
-          if [ ! -f gradlew ]; then
-            echo "❌ gradlew not found!"
-            exit 1
-          fi
           chmod +x gradlew
+          echo "✅ gradlew ready"
           head -n 5 gradlew
 
-      # 6️⃣ Build Debug & Release APKs
-      - name: Build Debug and Release APKs
+      # 6️⃣ Build Debug APK
+      - name: Build Debug APK
         run: |
           cd extracted-project
           ./gradlew clean
           ./gradlew assembleDebug --stacktrace
+
+      # 7️⃣ Build Release APK
+      - name: Build Release APK
+        run: |
+          cd extracted-project
           ./gradlew assembleRelease --stacktrace
 
-      # 7️⃣ Upload APKs as artifacts
-      - name: Upload APKs
+      # 8️⃣ Upload build artifacts
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: GitSafe-APKs
@@ -73,7 +76,7 @@ jobs:
             extracted-project/app/build/outputs/apk/debug/*.apk
             extracted-project/app/build/outputs/apk/release/*.apk
 
-      # 8️⃣ Summary
+      # 9️⃣ Build summary
       - name: CI Summary
         run: |
           echo "--------------------------------------"
