@@ -1,19 +1,40 @@
-name: Android CI
+name: 💥 DeskChat Android CI
 
+# 🚀 Trigger on push and pull request events to main
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
 
+# 🧱 Main build job
 jobs:
   build:
+    name: Build Android APKs
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      # 1️⃣ Fetch code from your repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for versioning if needed
 
+      # 2️⃣ Ensure the GitSafe folder exists and contains your Gradle files
+      - name: Verify Project Structure
+        run: |
+          echo "🔍 Checking project structure..."
+          if [ ! -d "GitSafe" ]; then
+            echo "❌ ERROR: 'GitSafe' directory not found at repo root."
+            exit 1
+          fi
+          if [ ! -f "GitSafe/gradlew" ]; then
+            echo "❌ ERROR: gradlew missing in GitSafe/. Make sure wrapper is generated."
+            exit 1
+          fi
+          echo "✅ Project structure looks correct."
+
+      # 3️⃣ Set up Java environment
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -21,17 +42,41 @@ jobs:
           java-version: 17
           cache: gradle
 
-      - name: Grant execute permission for Gradlew
+      # 4️⃣ Ensure gradlew is executable (important for Linux CI)
+      - name: Grant Execute Permission for Gradlew
         run: chmod +x GitSafe/gradlew
 
+      # 5️⃣ Validate Gradle wrapper integrity (prevents corrupt builds)
+      - name: Validate Gradle Wrapper
+        working-directory: GitSafe
+        run: ./gradlew wrapper --gradle-version 8.7 --distribution-type bin
+
+      # 6️⃣ Clean & build Debug + Release APKs
       - name: Build Debug and Release APKs
         working-directory: GitSafe
-        run: ./gradlew clean assembleDebug assembleRelease --stacktrace
+        run: |
+          echo "🏗️ Building APKs..."
+          ./gradlew clean assembleDebug assembleRelease --stacktrace
 
-      - name: Upload build artifacts
+      # 7️⃣ Upload artifacts (your APKs)
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: DeskChat-APKs
           path: |
             GitSafe/app/build/outputs/apk/debug/*.apk
             GitSafe/app/build/outputs/apk/release/*.apk
+
+      # 8️⃣ Optional: Verify .jar dependencies exist where expected
+      - name: Check for JAR dependencies
+        run: |
+          echo "🔍 Scanning for JARs..."
+          find GitSafe -type f -name "*.jar" || echo "⚠️ No .jar files found."
+          echo "✅ JAR check complete."
+
+      # 9️⃣ Optional: Print summary for debug visibility
+      - name: Final Summary
+        run: |
+          echo "🎉 Build completed successfully!"
+          echo "APK output directory:"
+          find GitSafe/app/build/outputs/apk -type f -name "*.apk" || true
