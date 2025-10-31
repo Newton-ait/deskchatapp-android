@@ -9,98 +9,52 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       
-    - name: Extract project
+    - name: Extract Android project
       run: |
-        echo "📂 Extracting GitSafe.zip..."
-        unzip -o -q GitSafe.zip
-        echo "✅ Extraction complete"
+        echo "📦 Extracting GitSafe.zip..."
+        unzip -q GitSafe.zip
+        echo "✅ Project extracted successfully"
         
     - name: Set up JDK 17
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
         
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v2
+      uses: android-actions/setup-android@v3
       
-    - name: Analyze project structure
+    - name: Make gradlew executable
+      run: chmod +x ./gradlew
+      
+    - name: Build Debug APK
       run: |
-        echo "🔍 Project Analysis:"
-        echo "Files in root:"
-        ls -la
-        echo "Gradle files:"
-        find . -name "*.gradle" -type f | head -10
-        echo "App directory:"
-        ls -la app/ || echo "No app directory"
+        echo "🏗️ Building Debug APK..."
+        ./gradlew assembleDebug --no-daemon --stacktrace
         
-    - name: Create minimal working build.gradle
+    - name: Build Release APK
       run: |
-        echo "🔧 Creating working build configuration..."
+        echo "🏗️ Building Release APK..."
+        ./gradlew assembleRelease --no-daemon --stacktrace
         
-        # Backup original files
-        cp build.gradle build.gradle.backup 2>/dev/null || true
-        cp app/build.gradle app/build.gradle.backup 2>/dev/null || true
-        
-        # Create minimal root build.gradle
-        cat > build.gradle << 'EOF'
-        buildscript {
-            repositories {
-                google()
-                mavenCentral()
-            }
-            dependencies {
-                classpath "com.android.tools.build:gradle:8.1.0"
-            }
-        }
-        
-        allprojects {
-            repositories {
-                google()
-                mavenCentral()
-            }
-        }
-        
-        task clean(type: Delete) {
-            delete rootProject.buildDir
-        }
-        EOF
-        
-        # Remove Google Services from app/build.gradle if it exists
-        if [ -f "app/build.gradle" ]; then
-          sed -i '/com.google.gms.google-services/d' app/build.gradle
-          sed -i '/apply plugin.*google-services/d' app/build.gradle
-          echo "✅ Removed Google Services plugin from app/build.gradle"
-        fi
-        
-    - name: Build with verbose output
-      run: |
-        echo "🏗️ Building with system Gradle..."
-        # Use installed gradle from Android setup
-        gradle clean assembleDebug --no-daemon --stacktrace --info
-        
-    - name: Check for APK
-      run: |
-        echo "🔍 Searching for APK files..."
-        find . -name "*.apk" -type f
-        if [ -d "app/build/outputs" ]; then
-          echo "📁 Build outputs:"
-          ls -la app/build/outputs/
-          find app/build/outputs/ -name "*.apk" -type f
-        fi
-        
-    - name: Upload any found APK
-      if: always()
+    - name: Upload APK Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: build-artifacts
+        name: deskchat-apks
         path: |
-          app/build/outputs/
-          *.gradle
-          *.log
+          app/build/outputs/apk/debug/*.apk
+          app/build/outputs/apk/release/*.apk
         retention-days: 30
+        
+    - name: Build Success
+      run: |
+        echo "🎉 Android Build Completed Successfully!"
+        echo "📱 APK files are available in the Artifacts section"
+        echo "📦 Project: DeskChat"
+        echo "🔧 Built from: GitSafe.zip"
