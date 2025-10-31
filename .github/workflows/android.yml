@@ -1,122 +1,95 @@
-name: Android Smart Build
+name: Android Final Attempt
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  analyze-and-build:
+  build:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Extract project
+    - name: Extract and clean
       run: |
-        echo "📦 Extracting GitSafe.zip..."
+        echo "🧹 Cleaning workspace..."
+        find . -maxdepth 1 -type f -name "*.gradle" -delete
+        find . -maxdepth 1 -type f -name "gradlew*" -delete
         rm -rf app gradle 2>/dev/null || true
-        rm -f *.gradle gradlew* 2>/dev/null || true
+        
+        echo "📦 Extracting GitSafe.zip..."
         unzip -o -q GitSafe.zip
         echo "✅ Extraction complete"
         
     - name: Setup environment
       uses: android-actions/setup-android@v3
       
-    - name: Analyze build configuration
-      id: analyze
+    - name: Create working build configuration
       run: |
-        echo "🔍 Analyzing build configuration..."
+        echo "🔧 Creating optimized build configuration..."
         
-        # Check for problematic dependencies
-        if grep -q "com.google.dagger:hilt-android" app/build.gradle; then
-          echo "⚠️ Found Dagger Hilt - may cause issues"
-          echo "has_dagger=true" >> $GITHUB_OUTPUT
-        else
-          echo "has_dagger=false" >> $GITHUB_OUTPUT
-        fi
-        
-        if grep -q "firebase-bom" app/build.gradle; then
-          echo "⚠️ Found Firebase BOM - may cause issues" 
-          echo "has_firebase_bom=true" >> $GITHUB_OUTPUT
-        else
-          echo "has_firebase_bom=false" >> $GITHUB_OUTPUT
-        fi
-        
-        if grep -q "-ktx" app/build.gradle; then
-          echo "⚠️ Found Kotlin dependencies - may need Kotlin setup"
-          echo "has_kotlin=true" >> $GITHUB_OUTPUT
-        else
-          echo "has_kotlin=false" >> $GITHUB_OUTPUT
-        fi
-        
-    - name: Build Attempt 1 - Original configuration
-      if: steps.analyze.outputs.has_dagger == 'false' && steps.analyze.outputs.has_firebase_bom == 'false'
-      run: |
-        echo "🏗️ Attempt 1: Building with original configuration..."
-        chmod +x gradlew
-        ./gradlew clean assembleDebug --no-daemon --stacktrace
-        
-    - name: Build Attempt 2 - Remove complex dependencies
-      if: steps.analyze.outputs.has_dagger == 'true' || steps.analyze.outputs.has_firebase_bom == 'true'
-      run: |
-        echo "🏗️ Attempt 2: Removing complex dependencies..."
-        # Remove problematic dependencies
-        sed -i '/com.google.dagger:hilt-android/d' app/build.gradle
-        sed -i '/firebase-bom/d' app/build.gradle
-        sed -i '/-ktx/d' app/build.gradle
-        
-        chmod +x gradlew
-        ./gradlew clean assembleDebug --no-daemon --stacktrace
-        
-    - name: Build Attempt 3 - Minimal configuration
-      if: failure()
-      run: |
-        echo "🏗️ Attempt 3: Using minimal configuration..."
-        # Create minimal build files
+        # Create fresh root build.gradle
         cat > build.gradle << 'EOF'
         buildscript {
-            repositories { google(); mavenCentral() }
-            dependencies { classpath "com.android.tools.build:gradle:7.4.2" }
+            repositories {
+                google()
+                mavenCentral()
+            }
+            dependencies {
+                classpath "com.android.tools.build:gradle:7.4.2"
+                classpath "com.google.gms:google-services:4.4.0"
+            }
         }
+        
         allprojects {
-            repositories { google(); mavenCentral() }
+            repositories {
+                google()
+                mavenCentral()
+            }
         }
-        task clean(type: Delete) { delete rootProject.buildDir }
-        EOF
         
-        cat > app/build.gradle << 'EOF'
-        plugins { id 'com.android.application' }
-        android {
-            compileSdk 33
-            namespace 'com.gitsafe.deskchat'
-            defaultConfig {
-                applicationId "com.gitsafe.deskchat"
-                minSdk 21
-                targetSdk 33
-                versionCode 1
-                versionName "1.0"
-            }
-            buildTypes {
-                debug { debuggable true; minifyEnabled false }
-            }
-        }
-        dependencies {
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.9.0'
+        task clean(type: Delete) {
+            delete rootProject.buildDir
         }
         EOF
         
-        chmod +x gradlew
-        ./gradlew clean assembleDebug --no-daemon --stacktrace
+        # Fix app/build.gradle - remove only problematic parts
+        echo "📝 Fixing app/build.gradle..."
+        
+        # Remove Dagger Hilt (main culprit)
+        sed -i '/com.google.dagger:hilt-android/d' app/build.gradle
+        
+        # Keep Firebase but fix configuration
+        if ! grep -q "apply plugin.*google-services" app/build.gradle; then
+          echo "" >> app/build.gradle
+          echo "apply plugin: 'com.google.gms.google-services'" >> app/build.gradle
+        fi
+        
+        echo "✅ Build configuration ready"
+        
+    - name: Install compatible Gradle
+      run: |
+        echo "📥 Installing Gradle 7.4.2..."
+        wget -q https://services.gradle.org/distributions/gradle-7.4.2-bin.zip
+        unzip -d /opt/gradle gradle-7.4.2-bin.zip
+        echo "/opt/gradle/gradle-7.4.2/bin" >> $GITHUB_PATH
+        
+    - name: Accept Android licenses
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        
+    - name: Build with optimized configuration
+      run: |
+        echo "🏗️ Building with optimized configuration..."
+        /opt/gradle/gradle-7.4.2/bin/gradle clean assembleDebug --no-daemon --stacktrace --info
         
     - name: Upload results
       uses: actions/upload-artifact@v4
       with:
-        name: build-attempt-${{ job.status }}
+        name: final-build-attempt
         path: |
           app/build/outputs/
-          build.gradle
-          app/build.gradle
-        if-no-files-found: ignore
+        if-no-files-found: warn
         retention-days: 30
