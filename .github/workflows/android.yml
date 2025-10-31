@@ -30,11 +30,11 @@ jobs:
         unzip -d /opt/gradle gradle-7.5-bin.zip
         echo "/opt/gradle/gradle-7.5/bin" >> $GITHUB_PATH
         
-    - name: Create simple build
+    - name: Create absolute minimal build
       run: |
-        echo "🔧 Creating simple build configuration..."
+        echo "🔧 Creating absolute minimal build..."
         
-        # Simple root build.gradle
+        # Root build.gradle
         cat > build.gradle << 'EOF'
         buildscript {
             repositories {
@@ -58,7 +58,7 @@ jobs:
         }
         EOF
         
-        # Simple app build.gradle - ONLY BASIC DEPENDENCIES
+        # App build.gradle - ABSOLUTE MINIMAL
         cat > app/build.gradle << 'EOF'
         plugins {
             id 'com.android.application'
@@ -81,45 +81,36 @@ jobs:
                     minifyEnabled false
                 }
             }
-            
-            compileOptions {
-                sourceCompatibility JavaVersion.VERSION_1_8
-                targetCompatibility JavaVersion.VERSION_1_8
-            }
         }
         
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.9.0'
         }
         EOF
         
-        echo "✅ Created simple build"
+        echo "✅ Created absolute minimal build"
         
     - name: Accept Android licenses
       run: |
         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
         
-    - name: Build with detailed logging
+    - name: Build with maximum debug info
       run: |
-        echo "🏗️ Building with detailed logging..."
-        /opt/gradle/gradle-7.5/bin/gradle clean assembleDebug --no-daemon --stacktrace --info --scan
+        echo "🏗️ Building with debug info..."
+        /opt/gradle/gradle-7.5/bin/gradle clean assembleDebug --no-daemon --stacktrace --info --debug
         
-    - name: Check build outputs
+    - name: Check what was built
       run: |
-        echo "🔍 Checking all build outputs..."
-        find app/build/ -type f -name "*.apk" -o -name "*.aab" -o -name "*.jar" | head -20
-        echo "📁 Build directory contents:"
+        echo "🔍 Build outputs:"
+        find app/build/ -type f -name "*.apk" -o -name "*.aab" -o -name "*.jar" 2>/dev/null || echo "No output files"
+        echo "📁 Build directories:"
         ls -la app/build/ || echo "No build directory"
-        ls -la app/build/outputs/ || echo "No outputs directory"
         
-    - name: Upload all build artifacts
-      if: always()
+    - name: Upload all build outputs
       uses: actions/upload-artifact@v4
       with:
         name: build-debug-info
         path: |
           app/build/
-          *.log
         if-no-files-found: warn
         retention-days: 30
