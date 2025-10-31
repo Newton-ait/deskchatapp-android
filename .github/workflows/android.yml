@@ -1,4 +1,4 @@
-name: Android CI (GitSafe ZIP Build)
+name: Android CI
 
 on:
   push:
@@ -11,45 +11,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout your repository code
-      - name: Checkout code
+      - name: 📦 Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Set up Java JDK 17 (required for modern Android builds)
-      - name: Set up JDK 17
+      - name: 🧰 Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      # 3️⃣ Confirm ZIP exists and list repo contents
-      - name: Verify repository contents
+      - name: 🗜️ Extract GitSafe project
         run: |
-          echo "📂 Repository structure:"
-          ls -R
-
-      # 4️⃣ Extract GitSafe.zip into a subfolder (extracted-project)
-      - name: Extract project ZIP
-        run: |
-          echo "📦 Extracting GitSafe.zip..."
+          echo "🔍 Extracting GitSafe.zip..."
           unzip -o GitSafe.zip -d extracted-project
-          echo "✅ Extraction complete. Listing extracted files:"
-          ls -R extracted-project
+          echo "✅ Extraction complete"
+          ls -R extracted-project || true
 
-      # 5️⃣ Give Gradlew permission to execute
-      - name: Grant execute permission for Gradlew
-        run: chmod +x extracted-project/GitSafe/gradlew
+      - name: 🧭 Locate Gradle Wrapper
+        id: find_gradle
+        run: |
+          WRAPPER_PATH=$(find extracted-project -type f -path "*/gradlew" | head -n 1)
+          if [ -z "$WRAPPER_PATH" ]; then
+            echo "❌ Gradle wrapper not found!"
+            exit 1
+          fi
+          echo "gradle_path=$WRAPPER_PATH" >> $GITHUB_OUTPUT
+          echo "✅ Gradle wrapper found at: $WRAPPER_PATH"
 
-      # 6️⃣ Build Debug and Release APKs with Gradle
-      - name: Build Debug and Release APKs
-        working-directory: extracted-project/GitSafe
-        run: ./gradlew clean assembleDebug assembleRelease --stacktrace
+      - name: 🔑 Grant execute permission
+        run: chmod +x ${{ steps.find_gradle.outputs.gradle_path }}
 
-      # 7️⃣ Upload generated APKs as build artifacts
-      - name: Upload build artifacts
+      - name: ⚙️ Build Debug & Release APKs
+        run: |
+          cd "$(dirname "${{ steps.find_gradle.outputs.gradle_path }}")"
+          echo "🏗️ Building APKs..."
+          ./gradlew clean assembleDebug assembleRelease --stacktrace
+
+      - name: 📦 Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
           name: DeskChat-APKs
           path: |
-            extracted-project/GitSafe/app/build/outputs/apk/debug/*.apk
-            extracted-project/GitSafe/app/build/outputs/apk/release/*.apk
+            **/app/build/outputs/apk/debug/*.apk
+            **/app/build/outputs/apk/release/*.apk
