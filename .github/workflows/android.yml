@@ -1,4 +1,4 @@
-name: Android Build - Force Success
+name: Android Build - Fix XML Resources
 
 on:
   push:
@@ -20,6 +20,42 @@ jobs:
         unzip -o -q GitSafe.zip
         echo "✅ Extraction complete"
         
+    - name: Fix XML resource files
+      run: |
+        echo "🔧 Fixing XML resource files..."
+        
+        # Fix activity_nearby_desks.xml - remove invalid processing instruction
+        if [ -f "app/src/main/res/layout/activity_nearby_desks.xml" ]; then
+          echo "📝 Fixing activity_nearby_desks.xml..."
+          sed -i '1s/.*/<?xml version="1.0" encoding="utf-8"?>/' app/src/main/res/layout/activity_nearby_desks.xml
+        fi
+        
+        # Add missing namespace declarations to all layout files
+        echo "📝 Adding missing namespaces to layout files..."
+        find app/src/main/res/layout -name "*.xml" -type f | while read file; do
+          if ! grep -q 'xmlns:app="http://schemas.android.com/apk/res-auto"' "$file"; then
+            echo "➕ Adding app namespace to $(basename $file)"
+            sed -i 's|xmlns:android="http://schemas.android.com/apk/res/android"|xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:app="http://schemas.android.com/apk/res-auto"|' "$file"
+          fi
+          
+          if ! grep -q 'xmlns:tools="http://schemas.android.com/tools"' "$file"; then
+            echo "➕ Adding tools namespace to $(basename $file)"
+            sed -i 's|xmlns:android="http://schemas.android.com/apk/res/android"|xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:tools="http://schemas.android.com/tools"|' "$file"
+          fi
+        done
+        
+        # Fix layout-night files too
+        if [ -d "app/src/main/res/layout-night" ]; then
+          find app/src/main/res/layout-night -name "*.xml" -type f | while read file; do
+            if ! grep -q 'xmlns:app="http://schemas.android.com/apk/res-auto"' "$file"; then
+              echo "➕ Adding app namespace to night/$(basename $file)"
+              sed -i 's|xmlns:android="http://schemas.android.com/apk/res/android"|xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:app="http://schemas.android.com/apk/res-auto"|' "$file"
+            fi
+          done
+        fi
+        
+        echo "✅ XML files fixed"
+        
     - name: Setup environment
       uses: android-actions/setup-android@v3
       
@@ -29,7 +65,7 @@ jobs:
         unzip -d /opt/gradle gradle-7.5-bin.zip
         echo "/opt/gradle/gradle-7.5/bin" >> $GITHUB_PATH
         
-    - name: Create working build
+    - name: Create build configuration
       run: |
         cat > build.gradle << 'EOF'
         buildscript {
@@ -60,58 +96,35 @@ jobs:
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
             implementation 'com.google.android.material:material:1.9.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+            implementation 'com.airbnb.android:lottie:6.1.0'
         }
         EOF
         
     - name: Accept licenses
       run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
         
-    - name: Try build and continue even if fails
+    - name: Build with fixed XML
       run: |
-        echo "🏗️ Attempting build..."
-        /opt/gradle/gradle-7.5/bin/gradle clean assembleDebug --no-daemon || echo "Build command failed but continuing"
+        echo "🏗️ Building with fixed XML resources..."
+        /opt/gradle/gradle-7.5/bin/gradle clean assembleDebug --no-daemon --stacktrace
         
-    - name: Capture ALL build artifacts
-      run: |
-        echo "📁 Complete project structure:"
-        find . -type f -name "*.apk" -o -name "*.aab" -o -name "*.jar" -o -name "*.dex" | head -20
-        
-        echo "📊 Build directory contents:"
-        ls -la app/build/ || echo "No build directory"
-        
-        if [ -d "app/build/outputs" ]; then
-          echo "📦 Outputs directory:"
-          find app/build/outputs/ -type f | head -20
-        fi
-        
-        echo "🔍 Checking if ANY APK exists:"
-        find . -name "*.apk" -type f | head -5 || echo "No APK files found"
-        
-    - name: Upload everything
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: complete-build-output
-        path: |
-          app/build/
-          build.gradle
-          app/build.gradle
+        name: deskchat-app
+        path: app/build/outputs/apk/debug/*.apk
         if-no-files-found: warn
         retention-days: 30
         
-    - name: Final report
+    - name: Success check
       run: |
-        echo "📊 Build Analysis Report:"
-        echo "✅ Gradle 7.5 + AGP 7.4.2 = Compatible"
-        echo "✅ Dependencies: Minimal AndroidX"
-        echo "✅ Build attempted"
-        
-        APK_COUNT=$(find . -name "*.apk" -type f | wc -l)
-        echo "📱 APK Files Found: $APK_COUNT"
-        
-        if [ $APK_COUNT -gt 0 ]; then
-          echo "🎉 SUCCESS: APK was generated!"
-          find . -name "*.apk" -type f
+        if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+          echo "🎉 🎉 🎉 BUILD SUCCESSFUL! 🎉 🎉 🎉"
+          echo "📱 APK generated successfully!"
+          echo "✅ Fixed XML resource errors"
+          echo "✅ Added missing namespace declarations"
+          echo "✅ Added Lottie dependency"
         else
-          echo "❌ No APK generated - checking for other outputs"
-          find app/build/ -type f | head -10 || echo "No build outputs"
+          echo "❌ Build completed but no APK found"
         fi
