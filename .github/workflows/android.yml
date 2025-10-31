@@ -11,21 +11,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout the code from your repository
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # 2️⃣ Set up JDK 17 using Temurin (for Android Gradle builds)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+          cache: gradle
 
+      # 3️⃣ Ensure gradlew can be executed (important on Linux CI)
       - name: Grant execute permission for Gradlew
         run: chmod +x gradlew
 
+      # 4️⃣ Build Debug & Release APKs (with stacktrace for debugging)
       - name: Build Debug and Release APKs
         run: ./gradlew clean assembleDebug assembleRelease --stacktrace
 
+      # 5️⃣ Upload both APKs as artifacts for easy download
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
