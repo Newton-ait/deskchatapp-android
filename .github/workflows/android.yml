@@ -19,8 +19,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-          # ⛔ remove cache to avoid Gradle path check errors
-          cache: 'none'
+          # (removed cache: 'none' → not needed)
 
       - name: Grant execute permission for Gradlew
         run: chmod +x ./GitSafe/gradlew
