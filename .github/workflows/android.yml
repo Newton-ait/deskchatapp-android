@@ -40,18 +40,28 @@ jobs:
             rsync -av --exclude='extracted-project' --exclude='.git' ./ extracted-project/
           fi
 
-      # 5️⃣ Repair or replace Gradle wrapper JAR
+      # 5️⃣ Fix Gradle wrapper (robust version)
       - name: Fix or replace Gradle Wrapper
         run: |
           echo "🧩 Ensuring valid gradle-wrapper.jar..."
           mkdir -p extracted-project/gradle/wrapper
-          # Delete any broken jar
           rm -f extracted-project/gradle/wrapper/gradle-wrapper.jar
-          # Download a valid one from Gradle 8.7 distribution
+          
+          # Download Gradle distribution
           wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O gradle.zip
-          unzip -q gradle.zip
-          cp gradle/lib/gradle-wrapper.jar extracted-project/gradle/wrapper/
-          echo "✅ Replaced gradle-wrapper.jar successfully."
+          unzip -q gradle.zip -d gradle-dist
+          
+          echo "📂 Searching for gradle-wrapper.jar inside distribution..."
+          FOUND_JAR=$(find gradle-dist -name "gradle-wrapper.jar" | head -n 1)
+          
+          if [ -f "$FOUND_JAR" ]; then
+            echo "✅ Found gradle-wrapper.jar at: $FOUND_JAR"
+            cp "$FOUND_JAR" extracted-project/gradle/wrapper/gradle-wrapper.jar
+          else
+            echo "❌ gradle-wrapper.jar not found inside Gradle distribution!"
+            exit 1
+          fi
+
           ls -l extracted-project/gradle/wrapper
 
       # 6️⃣ Make gradlew executable
