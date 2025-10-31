@@ -19,13 +19,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-          # (removed cache: 'none' → not needed)
 
       - name: Grant execute permission for Gradlew
-        run: chmod +x ./GitSafe/gradlew
+        run: chmod +x gradlew
 
       - name: Build Debug and Release APKs
-        working-directory: ./GitSafe
         run: ./gradlew clean assembleDebug assembleRelease --stacktrace
 
       - name: Upload build artifacts
@@ -33,5 +31,5 @@ jobs:
         with:
           name: DeskChat-APKs
           path: |
-            GitSafe/app/build/outputs/apk/debug/*.apk
-            GitSafe/app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
