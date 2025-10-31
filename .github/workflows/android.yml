@@ -16,99 +16,32 @@ jobs:
     - name: Extract project
       run: |
         echo "📦 Extracting GitSafe.zip..."
-        # Clean and extract
         rm -rf app gradle 2>/dev/null || true
         rm -f *.gradle gradlew* 2>/dev/null || true
         unzip -o -q GitSafe.zip
         echo "✅ Extraction complete"
         
-    - name: Setup Java and Android
+    - name: Setup environment
       uses: android-actions/setup-android@v3
       
-    - name: Debug project structure
+    - name: Use original project files (no modifications)
       run: |
-        echo "🔍 Project Structure:"
-        echo "=== Root Files ==="
-        ls -la
-        echo "=== App build.gradle ==="
-        cat app/build.gradle || echo "No app/build.gradle"
-        echo "=== Root build.gradle ==="
-        cat build.gradle || echo "No root build.gradle"
-        echo "=== Java Source Files ==="
-        find . -name "*.java" | head -10
-        echo "📊 Java files found: $(find . -name "*.java" | wc -l)"
+        echo "🔧 Using original project configuration..."
+        echo "📁 Project files preserved as-is"
         
-    - name: Create minimal build files
+    - name: Install compatible Gradle
       run: |
-        echo "🔧 Creating minimal build configuration..."
+        echo "📥 Installing Gradle 7.5 (compatible with project)..."
+        wget -q https://services.gradle.org/distributions/gradle-7.5-bin.zip
+        unzip -d /opt/gradle gradle-7.5-bin.zip
+        echo "/opt/gradle/gradle-7.5/bin" >> $GITHUB_PATH
         
-        # Create absolute minimal root build.gradle
-        cat > build.gradle << 'EOF'
-        buildscript {
-            repositories { google(); mavenCentral() }
-            dependencies { classpath "com.android.tools.build:gradle:7.4.2" }
-        }
-        allprojects {
-            repositories { google(); mavenCentral() }
-        }
-        task clean(type: Delete) { delete rootProject.buildDir }
-        EOF
-        
-        # Create minimal app build.gradle if missing or fix existing
-        if [ -f "app/build.gradle" ]; then
-          echo "📝 Fixing existing app/build.gradle..."
-          # Remove problematic plugins
-          sed -i '/com.google.gms.google-services/d' app/build.gradle
-          sed -i '/apply plugin.*google-services/d' app/build.gradle
-          # Remove Firebase dependencies if present
-          sed -i '/com.google.firebase/d' app/build.gradle
-          sed -i '/com.google.android.gms/d' app/build.gradle
-        else
-          echo "📝 Creating new app/build.gradle..."
-          mkdir -p app
-          cat > app/build.gradle << 'EOF'
-        plugins { id 'com.android.application' }
-        android {
-            compileSdk 33
-            defaultConfig {
-                applicationId "com.gitsafe.deskchat"
-                minSdk 21
-                targetSdk 33
-                versionCode 1
-                versionName "1.0"
-            }
-            buildTypes {
-                release { minifyEnabled false }
-                debug { debuggable true }
-            }
-        }
-        dependencies {
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.9.0'
-        }
-        EOF
-        fi
-        
-    - name: Try direct Gradle build
+    - name: Build with compatible Gradle
       run: |
-        echo "🏗️ Attempting build..."
-        gradle clean assembleDebug --no-daemon --stacktrace
+        echo "🏗️ Building with Gradle 7.5..."
+        /opt/gradle/gradle-7.5/bin/gradle clean assembleDebug --no-daemon --stacktrace
         
-    - name: Check for APK
-      run: |
-        echo "🔍 Checking build results..."
-        if [ -d "app/build/outputs/apk/debug" ]; then
-          echo "✅ APK directory found"
-          ls -la app/build/outputs/apk/debug/
-          APK_COUNT=$(find app/build/outputs/apk/debug -name "*.apk" | wc -l)
-          echo "📱 Found $APK_COUNT APK file(s)"
-        else
-          echo "❌ No APK directory found"
-          echo "📁 Available outputs:"
-          find app/build/ -type f 2>/dev/null | head -10 || echo "No build outputs"
-        fi
-        
-    - name: Upload APK if exists
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: deskchat-apk
@@ -116,22 +49,6 @@ jobs:
         if-no-files-found: ignore
         retention-days: 30
         
-    - name: Upload project structure
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: project-analysis
-        path: |
-          build.gradle
-          app/build.gradle
-          app/src/
-        if-no-files-found: ignore
-        retention-days: 30
-        
-    - name: Build report
-      run: |
-        echo "📊 Build Report:"
-        echo "📦 Source: GitSafe.zip"
-        echo "🔧 Approach: Minimal build configuration"
-        echo "📱 Result: $(if [ -d "app/build/outputs/apk/debug" ]; then echo 'SUCCESS - APK generated'; else echo 'FAILED - No APK'; fi)"
-        echo "✅ Process completed"
+    - name: Success message
+      if: success()
+      run: echo "🎉 Build successful! APK available in artifacts."
