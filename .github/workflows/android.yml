@@ -74,6 +74,13 @@ jobs:
         unzip -d /opt/gradle gradle-8.5-bin.zip
         echo "/opt/gradle/gradle-8.5/bin" >> $GITHUB_PATH
         
+    - name: Verify environment
+      run: |
+        echo "🔍 Environment check:"
+        java -version
+        gradle --version || echo "Gradle not in PATH yet"
+        /opt/gradle/gradle-8.5/bin/gradle --version
+        
     - name: Build only Debug APK
       run: |
         echo "🏗️ Building Debug APK..."
@@ -87,19 +94,31 @@ jobs:
           ls -la app/build/outputs/apk/debug/
           APK_COUNT=$(find app/build/outputs/apk/debug -name "*.apk" | wc -l)
           echo "📱 Found $APK_COUNT APK file(s)"
+          
+          # Upload specific APK files
+          echo "::set-output name=apk_exists::true"
         else
           echo "❌ No APK directory found"
           echo "📁 Build outputs:"
           find app/build/outputs/ -type f 2>/dev/null | head -10 || echo "No build outputs"
+          echo "::set-output name=apk_exists::false"
         fi
         
-    - name: Upload any build artifacts
+    - name: Upload APK artifacts
+      if: steps.check_apk.outputs.apk_exists == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: deskchat-apk
+        path: app/build/outputs/apk/debug/*.apk
+        retention-days: 30
+        
+    - name: Upload build logs
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: build-results
+        name: build-logs
         path: |
-          app/build/outputs/
+          app/build/reports/
           *.log
         retention-days: 30
         
