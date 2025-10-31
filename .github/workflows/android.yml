@@ -16,62 +16,50 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Extract the ZIP project
-      - name: Extract GitSafe project
+      # 2️⃣ Extract GitSafe project (if uploaded as ZIP)
+      - name: Extract GitSafe Project
         run: |
-          echo "🔍 Checking for GitSafe.zip..."
-          if [ -f "GitSafe.zip" ]; then
-            mkdir -p extracted-project
-            unzip -o GitSafe.zip -d extracted-project
-            echo "✅ Unzipped GitSafe.zip into extracted-project/"
-          else
-            echo "❌ ERROR: GitSafe.zip not found!"
-            exit 1
-          fi
+          mkdir extracted-project
+          unzip -o GitSafe.zip -d extracted-project
+          echo "✅ Extracted GitSafe.zip"
 
-      # 3️⃣ Set up Java 17 (Temurin)
+      # 3️⃣ Set up JDK 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: 17
+          distribution: 'temurin'
+          java-version: '17'
 
       # 4️⃣ Set up Android SDK
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v2
-        with:
-          api-level: 34
-          build-tools: 34.0.0
-          components: platform-tools
+        uses: android-actions/setup-android@v3
 
-      # 5️⃣ Generate local.properties (SDK path)
-      - name: Generate local.properties
+      # 5️⃣ Create local.properties (required by Gradle)
+      - name: Create local.properties
         run: |
-          cd extracted-project
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
-          echo "✅ Created local.properties with SDK path: $ANDROID_HOME"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > extracted-project/local.properties
+          cat extracted-project/local.properties
 
       # 6️⃣ Set up Gradle
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       # 7️⃣ Build Debug and Release APKs
       - name: Build Debug and Release APKs
         run: |
           cd extracted-project
-          echo "🏗️ Running Gradle Wrapper build..."
-          chmod +x gradlew || echo "No gradlew found — using system Gradle"
-          ./gradlew clean assembleDebug assembleRelease --stacktrace || gradle clean assembleDebug assembleRelease --stacktrace
+          chmod +x gradlew || true
+          ./gradlew clean assembleDebug assembleRelease --no-daemon --stacktrace
 
-      # 8️⃣ Upload built APKs as artifacts
-      - name: Upload APK artifacts
+      # 8️⃣ Upload artifacts
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Built-APKs
-          path: |
-            extracted-project/app/build/outputs/**/*.apk
+          name: Debug-APK
+          path: extracted-project/app/build/outputs/apk/debug/*.apk
 
-      # 9️⃣ Optional: Show installed SDKs for debugging
-      - name: Show Android SDK packages
-        run: |
-          yes | sdkmanager --list || true
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Release-APK
+          path: extracted-project/app/build/outputs/apk/release/*.apk
