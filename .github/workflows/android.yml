@@ -40,23 +40,19 @@ jobs:
             rsync -av --exclude='extracted-project' --exclude='.git' ./ extracted-project/
           fi
 
-      # 5️⃣ Ensure gradle wrapper folder exists and move JAR correctly
-      - name: Fix Gradle wrapper location
+      # 5️⃣ Repair or replace Gradle wrapper JAR
+      - name: Fix or replace Gradle Wrapper
         run: |
-          echo "📁 Checking gradle wrapper..."
+          echo "🧩 Ensuring valid gradle-wrapper.jar..."
           mkdir -p extracted-project/gradle/wrapper
-          if [ -f extracted-project/gradle-wrapper.jar ]; then
-            mv extracted-project/gradle-wrapper.jar extracted-project/gradle/wrapper/gradle-wrapper.jar
-            echo "✅ Moved gradle-wrapper.jar into gradle/wrapper/"
-          elif [ -f extracted-project/gradle/wrapper/gradle-wrapper.jar ]; then
-            echo "✅ gradle-wrapper.jar already in correct place"
-          else
-            echo "❌ gradle-wrapper.jar missing, trying to repair..."
-            wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O gradle.zip
-            unzip -q gradle.zip
-            cp gradle/lib/gradle-wrapper.jar extracted-project/gradle/wrapper/
-          fi
-          ls -R extracted-project/gradle/wrapper
+          # Delete any broken jar
+          rm -f extracted-project/gradle/wrapper/gradle-wrapper.jar
+          # Download a valid one from Gradle 8.7 distribution
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O gradle.zip
+          unzip -q gradle.zip
+          cp gradle/lib/gradle-wrapper.jar extracted-project/gradle/wrapper/
+          echo "✅ Replaced gradle-wrapper.jar successfully."
+          ls -l extracted-project/gradle/wrapper
 
       # 6️⃣ Make gradlew executable
       - name: Make gradlew executable
@@ -70,7 +66,7 @@ jobs:
         run: |
           cd extracted-project
           echo "🧩 Verifying Gradle wrapper..."
-          ./gradlew --version || (echo "❌ Gradle wrapper failed"; exit 1)
+          ./gradlew --version
 
       # 8️⃣ Build APKs
       - name: Build Debug and Release APKs
@@ -92,7 +88,7 @@ jobs:
       - name: CI Summary
         run: |
           echo "--------------------------------------"
-          echo "✅ Android CI Finished"
+          echo "✅ Android CI Finished Successfully"
           echo "Repository: $GITHUB_REPOSITORY"
           echo "Branch: $GITHUB_REF_NAME"
           echo "--------------------------------------"
