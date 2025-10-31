@@ -38,7 +38,6 @@ jobs:
             mkdir -p extracted-project
             rsync -av --exclude='extracted-project' --exclude='.git' ./ extracted-project/
           fi
-
           echo "✅ Extraction complete. Directory preview:"
           ls -R extracted-project | head -n 50
 
@@ -57,12 +56,15 @@ jobs:
           ls -lh gradle/wrapper/gradle-wrapper.jar
           file gradle/wrapper/gradle-wrapper.jar
 
-      # 6️⃣ Make gradlew executable
-      - name: Make gradlew executable
+      # 6️⃣ Normalize and make gradlew executable
+      - name: Normalize line endings and fix gradlew permissions
         run: |
           cd extracted-project
+          echo "🧩 Normalizing gradlew line endings..."
+          sed -i 's/\r$//' gradlew || true
           chmod +x gradlew
-          echo "✅ gradlew permissions fixed"
+          echo "✅ gradlew fixed and ready"
+          head -n 3 gradlew
           ls -lh gradlew
 
       # 7️⃣ Verify Gradle Wrapper
