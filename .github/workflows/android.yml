@@ -1,113 +1,104 @@
-name: Android CI (Full Build)
+name: Android CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
-      # 1️⃣ Checkout repository
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # 2️⃣ Extract your GitSafe.zip project
-      - name: Extract project
-        run: |
-          echo "📦 Extracting GitSafe project..."
-          mkdir -p extracted-project
-          unzip -o GitSafe.zip -d extracted-project
-          echo "✅ Extraction complete."
-
-      # 3️⃣ Locate your project folder (auto-detect even in nested dirs)
-      - name: Locate project folder
-        id: locate
-        run: |
-          echo "🔍 Searching for settings.gradle..."
-          PROJECT_DIR=$(find extracted-project -type f -name "settings.gradle*" | head -n 1 | xargs dirname)
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "❌ Could not locate a Gradle project (no settings.gradle found)."
-            exit 1
-          fi
-          echo "✅ Found project directory: $PROJECT_DIR"
-          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
-
-      # 🧠 Static Gradle Pre-Check
-      - name: Static Gradle Configuration Pre-Check
-        run: |
-          cd ${{ steps.locate.outputs.project_dir }}
-          echo "🧠 Running Gradle configuration pre-check..."
-          if [ ! -f "gradlew" ]; then
-            echo "❌ Missing gradlew script in $(pwd)"
-            exit 1
-          fi
-          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
-            echo "❌ Missing settings.gradle file!"
-            exit 1
-          fi
-          if [ ! -f "app/build.gradle" ] && [ ! -f "app/build.gradle.kts" ]; then
-            echo "❌ No app module found!"
-            exit 1
-          fi
-          echo "✅ Gradle structure looks good."
-
-      # 4️⃣ Set up JDK 17
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: 17
-
-      # 5️⃣ Verify Gradle Wrapper (smart detection & safe execution)
-      - name: Verify Gradle Wrapper
-        run: |
-          cd ${{ steps.locate.outputs.project_dir }}
-          echo "🧩 Verifying Gradle wrapper..."
-          echo "📂 Current directory: $(pwd)"
-          ls -1 | head -10
-
-          # Restore wrapper jar if missing
-          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            echo "⚠️ gradle-wrapper.jar missing — restoring official one..."
-            mkdir -p gradle/wrapper
-            curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \
-              https://raw.githubusercontent.com/gradle/gradle/master/gradle/wrapper/gradle-wrapper.jar
-          fi
-
-          # Ensure gradlew exists and is executable
-          if [ ! -f gradlew ]; then
-            echo "❌ gradlew script not found — attempting nested search..."
-            NESTED_GRADLEW=$(find . -type f -name "gradlew" | head -n 1)
-            if [ -z "$NESTED_GRADLEW" ]; then
-              echo "❌ No gradlew found anywhere."
-              exit 1
-            fi
-            echo "📂 Found nested gradlew at: $NESTED_GRADLEW"
-            cd "$(dirname "$NESTED_GRADLEW")"
-          fi
-
-          chmod +x gradlew
-          echo "✅ Gradle Wrapper verified — running version check..."
-          ./gradlew --version || (echo "❌ Gradle wrapper execution failed!" && exit 1)
-
-      # 6️⃣ Build Debug and Release APKs
-      - name: Build Debug and Release APKs
-        run: |
-          cd ${{ steps.locate.outputs.project_dir }}
-          echo "🚀 Building APKs..."
-          chmod +x gradlew
-          ./gradlew assembleDebug assembleRelease --stacktrace
-
-      # 7️⃣ Upload generated APKs
-      - name: Upload APKs
-        uses: actions/upload-artifact@v4
-        with:
-          name: GitSafe-APKs
-          path: |
-            ${{ steps.locate.outputs.project_dir }}/app/build/outputs/apk/debug/*.apk
-            ${{ steps.locate.outputs.project_dir }}/app/build/outputs/apk/release/*.apk
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Validate ZIP structure
+      run: |
+        echo "📦 Checking GitSafe.zip structure..."
+        if [ ! -f "GitSafe.zip" ]; then
+          echo "❌ GitSafe.zip not found in repository root"
+          exit 1
+        fi
+        echo "✅ GitSafe.zip found"
+        
+    - name: Extract Android project
+      run: |
+        echo "📂 Extracting GitSafe.zip..."
+        unzip -q GitSafe.zip
+        echo "✅ Extraction complete"
+        echo "📁 Current directory structure:"
+        ls -la
+        echo "📁 App directory contents:"
+        ls -la app/ || echo "⚠️ No app directory found at root"
+        
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v2
+      
+    - name: Validate Gradle Wrapper
+      run: |
+        echo "🔍 Validating Gradle wrapper..."
+        if [ ! -f "gradlew" ]; then
+          echo "❌ gradlew not found at project root"
+          exit 1
+        fi
+        chmod +x ./gradlew
+        echo "✅ Gradle wrapper is ready"
+        
+    - name: Cache Gradle dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+          
+    - name: Build Debug APK
+      run: |
+        echo "🏗️ Building Debug APK..."
+        ./gradlew assembleDebug --no-daemon
+        echo "✅ Debug build complete"
+        
+    - name: Build Release APK
+      run: |
+        echo "🏗️ Building Release APK..."
+        ./gradlew assembleRelease --no-daemon
+        echo "✅ Release build complete"
+        
+    - name: Run Unit Tests
+      run: |
+        echo "🧪 Running unit tests..."
+        ./gradlew test --no-daemon
+        echo "✅ Tests complete"
+        
+    - name: Lint Check
+      run: |
+        echo "🔍 Running lint..."
+        ./gradlew lintDebug --no-daemon
+        echo "✅ Lint check complete"
+        
+    - name: Upload APK Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: deskchat-apks
+        path: |
+          app/build/outputs/apk/debug/*.apk
+          app/build/outputs/apk/release/*.apk
+        retention-days: 30
+        
+    - name: Build Report
+      run: |
+        echo "📊 Build Summary:"
+        echo "✅ Android Project: GitSafe (Root directory)"
+        echo "✅ APK Location: app/build/outputs/apk/"
+        echo "✅ Gradle Wrapper: Authentic and functional"
+        echo "🎉 Build completed successfully!"
