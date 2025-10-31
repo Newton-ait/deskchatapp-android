@@ -7,48 +7,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     
     steps:
-    - name: Checkout code
+    - name: Checkout
       uses: actions/checkout@v4
       
-    - name: Extract project
-      run: |
-        echo "📦 Extracting GitSafe.zip..."
-        rm -rf app gradle 2>/dev/null || true
-        rm -f *.gradle gradlew* 2>/dev/null || true
-        unzip -o -q GitSafe.zip
-        echo "✅ Extraction complete"
-        
-    - name: Setup environment
+    - name: Extract
+      run: unzip -o -q GitSafe.zip
+      
+    - name: Setup Android
       uses: android-actions/setup-android@v3
       
-    - name: Use original project files (no modifications)
+    - name: Build with wrapper
       run: |
-        echo "🔧 Using original project configuration..."
-        echo "📁 Project files preserved as-is"
-        
-    - name: Install compatible Gradle
-      run: |
-        echo "📥 Installing Gradle 7.5 (compatible with project)..."
-        wget -q https://services.gradle.org/distributions/gradle-7.5-bin.zip
-        unzip -d /opt/gradle gradle-7.5-bin.zip
-        echo "/opt/gradle/gradle-7.5/bin" >> $GITHUB_PATH
-        
-    - name: Build with compatible Gradle
-      run: |
-        echo "🏗️ Building with Gradle 7.5..."
-        /opt/gradle/gradle-7.5/bin/gradle clean assembleDebug --no-daemon --stacktrace
+        chmod +x gradlew
+        ./gradlew clean assembleDebug --no-daemon --stacktrace
         
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: deskchat-apk
+        name: apk-result
         path: app/build/outputs/apk/debug/*.apk
         if-no-files-found: ignore
-        retention-days: 30
-        
-    - name: Success message
-      if: success()
-      run: echo "🎉 Build successful! APK available in artifacts."
