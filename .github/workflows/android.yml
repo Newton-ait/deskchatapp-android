@@ -16,12 +16,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Extract GitSafe Project (if ZIP)
+      # 2️⃣ Extract GitSafe project
       - name: Extract GitSafe project
         run: |
           mkdir -p extracted-project
           unzip -o GitSafe.zip -d extracted-project
-          echo "📦 Project extracted:"
+          echo "📦 Extracted structure:"
           ls -R extracted-project
 
       # 3️⃣ Set up JDK 17
@@ -31,51 +31,53 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 4️⃣ Install Android SDK (complete setup)
+      # 4️⃣ Install Android SDK
       - name: Install Android SDK
         run: |
-          echo "📥 Installing Android SDK..."
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
           sudo apt-get update -qq
           sudo apt-get install -y wget unzip
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
           mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O sdk-tools.zip
           unzip -q sdk-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
           mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0"
-          echo "✅ Android SDK installed"
+            "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      # 5️⃣ Make gradlew executable (if exists)
-      - name: Make Gradle wrapper executable
+      # 5️⃣ Ensure gradlew is executable and valid
+      - name: Fix Gradle Wrapper
         run: |
           cd extracted-project
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-          else
-            echo "⚠️ gradlew not found — generating a clean one..."
+          if [ ! -f "gradlew" ]; then
+            echo "⚠️ gradlew missing — generating wrapper..."
             wget https://services.gradle.org/distributions/gradle-8.7-bin.zip -O gradle.zip
             unzip -q gradle.zip -d gradle_home
             gradle_home/gradle-8.7/bin/gradle wrapper
-            chmod +x gradlew
           fi
+          chmod +x gradlew
+          ls -l gradlew
+          head -5 gradlew
 
-      # 6️⃣ Build Debug APK
+      # 6️⃣ Verify Gradle wrapper works
+      - name: Verify Gradle version
+        run: |
+          cd extracted-project
+          ./gradlew --version
+
+      # 7️⃣ Build Debug APK
       - name: Build Debug APK
         run: |
           cd extracted-project
           ./gradlew assembleDebug --stacktrace
 
-      # 7️⃣ Build Release APK
+      # 8️⃣ Build Release APK
       - name: Build Release APK
         run: |
           cd extracted-project
           ./gradlew assembleRelease --stacktrace
 
-      # 8️⃣ Upload Build Artifacts (Debug + Release)
+      # 9️⃣ Upload APKs
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -84,12 +86,12 @@ jobs:
             extracted-project/**/build/outputs/apk/debug/*.apk
             extracted-project/**/build/outputs/apk/release/*.apk
 
-      # 9️⃣ CI Summary
-      - name: Summary
+      # 🔟 Summary
+      - name: CI Summary
         run: |
           echo "--------------------------------------"
           echo "✅ Android CI Summary"
-          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Repo: $GITHUB_REPOSITORY"
           echo "Branch: $GITHUB_REF_NAME"
           echo "Status: ${{ job.status }}"
           echo "--------------------------------------"
