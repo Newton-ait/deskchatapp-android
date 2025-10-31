@@ -1,54 +1,80 @@
-name: Android CI (Auto Detect)
+name: Android CI (Full Build)
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🧩 Checkout repository
+      # -----------------------------
+      # 🧰 Step 1: Checkout repository
+      # -----------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🔧 Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: 📦 Extract project ZIP
+      # ---------------------------------------
+      # 📦 Step 2: Extract project from ZIP file
+      # ---------------------------------------
+      - name: Extract GitSafe project
         run: |
-          echo "📦 Extracting GitSafe.zip..."
-          unzip -o GitSafe.zip -d extracted-project
-          echo "✅ Extraction complete."
-
-      - name: 📁 Detect correct build directory
-        id: find_dir
-        run: |
-          if [ -f "gradlew" ]; then
-            echo "dir=." >> $GITHUB_OUTPUT
-          elif [ -f "extracted-project/GitSafe/gradlew" ]; then
-            echo "dir=extracted-project/GitSafe" >> $GITHUB_OUTPUT
-          elif [ -f "extracted-project/gradlew" ]; then
-            echo "dir=extracted-project" >> $GITHUB_OUTPUT
+          echo "🔍 Checking for GitSafe.zip..."
+          if [ -f "GitSafe.zip" ]; then
+            mkdir extracted-project
+            unzip -o GitSafe.zip -d extracted-project
+            echo "✅ Unzipped GitSafe.zip into extracted-project/"
           else
-            echo "❌ gradlew not found"; exit 1
+            echo "❌ ERROR: GitSafe.zip not found!"
+            exit 1
           fi
 
-      - name: 🏗️ Build APK (Debug + Release)
+      # ---------------------------------
+      # 🧩 Step 3: Locate the Gradle folder
+      # ---------------------------------
+      - name: Verify project structure
         run: |
-          cd "${{ steps.find_dir.outputs.dir }}"
+          echo "🔍 Checking structure..."
+          if [ ! -d "extracted-project/GitSafe" ]; then
+            echo "❌ ERROR: GitSafe folder missing inside extracted-project/"
+            echo "Listing structure for debug:"
+            ls -R extracted-project || true
+            exit 1
+          fi
+          echo "✅ Found GitSafe project."
+
+      # ---------------------------------
+      # ☕ Step 4: Set up JDK and Gradle
+      # ---------------------------------
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # ---------------------------------
+      # ⚙️ Step 5: Build APKs
+      # ---------------------------------
+      - name: Build Debug and Release APKs
+        run: |
+          cd extracted-project/GitSafe
+          echo "🏗️ Running Gradle Wrapper build..."
           chmod +x gradlew
-          echo "🏗️ Building in $(pwd)..."
           ./gradlew clean assembleDebug assembleRelease --stacktrace
 
-      - name: 📤 Upload APKs
+      # ---------------------------------
+      # 📤 Step 6: Upload built APKs
+      # ---------------------------------
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: APKs
+          name: Built-APKs
           path: |
-            **/build/outputs/apk/**/*.apk
+            extracted-project/GitSafe/app/build/outputs/**/*.apk
