@@ -1,4 +1,4 @@
-name: Android CI
+name: Android CI (No Wrapper Build)
 
 on:
   push:
@@ -27,25 +27,28 @@ jobs:
           echo "✅ Extraction complete"
           ls -R extracted-project || true
 
-      - name: 🧭 Locate Gradle Wrapper
+      - name: 🧭 Locate Gradle project
         id: find_gradle
         run: |
-          WRAPPER_PATH=$(find extracted-project -type f -path "*/gradlew" | head -n 1)
-          if [ -z "$WRAPPER_PATH" ]; then
-            echo "❌ Gradle wrapper not found!"
+          ROOT_PATH=$(find extracted-project -name "settings.gradle" -o -name "settings.gradle.kts" | head -n 1)
+          if [ -z "$ROOT_PATH" ]; then
+            echo "❌ Could not find settings.gradle file."
             exit 1
           fi
-          echo "gradle_path=$WRAPPER_PATH" >> $GITHUB_OUTPUT
-          echo "✅ Gradle wrapper found at: $WRAPPER_PATH"
+          PROJECT_DIR=$(dirname "$ROOT_PATH")
+          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
+          echo "✅ Found project at: $PROJECT_DIR"
 
-      - name: 🔑 Grant execute permission
-        run: chmod +x ${{ steps.find_gradle.outputs.gradle_path }}
+      - name: ⚙️ Install Gradle (system-level)
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.7
 
-      - name: ⚙️ Build Debug & Release APKs
+      - name: 🏗️ Build Debug & Release APKs
         run: |
-          cd "$(dirname "${{ steps.find_gradle.outputs.gradle_path }}")"
-          echo "🏗️ Building APKs..."
-          ./gradlew clean assembleDebug assembleRelease --stacktrace
+          cd "${{ steps.find_gradle.outputs.project_dir }}"
+          echo "🚀 Building APKs..."
+          gradle clean assembleDebug assembleRelease --stacktrace
 
       - name: 📦 Upload APK artifacts
         uses: actions/upload-artifact@v4
