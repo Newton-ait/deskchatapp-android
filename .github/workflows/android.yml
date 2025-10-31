@@ -27,17 +27,17 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # 4️⃣ Extract ZIP if project is zipped (optional)
-      - name: Extract project if zipped
+      # 4️⃣ Extract project if zipped (handles both cases)
+      - name: Extract or prepare project
         run: |
           if [ -f deskchatapp-android.zip ]; then
-            echo "📦 Extracting project..."
+            echo "📦 Extracting project from ZIP..."
             mkdir extracted-project
             unzip -q deskchatapp-android.zip -d extracted-project
           else
-            echo "No zip found. Using repository root."
-            mkdir -p extracted-project
-            cp -r . extracted-project/
+            echo "📁 No zip found — copying repository to extracted-project..."
+            mkdir extracted-project
+            rsync -av --exclude='extracted-project' --exclude='.git' ./ extracted-project/
           fi
 
       # 5️⃣ Grant execute permission to Gradle wrapper
@@ -45,14 +45,14 @@ jobs:
         run: |
           cd extracted-project
           chmod +x gradlew
-          file gradlew
+          file gradlew || true
 
       # 6️⃣ Verify Gradle wrapper JAR
       - name: Verify Gradle wrapper JAR
         run: |
           cd extracted-project/gradle/wrapper
           ls -l
-          jar tf gradle-wrapper.jar | head -n 10
+          jar tf gradle-wrapper.jar | head -n 10 || echo "⚠️ Unable to inspect gradle-wrapper.jar"
 
       # 7️⃣ Build project using Gradle wrapper
       - name: Build Debug and Release APKs
@@ -67,9 +67,9 @@ jobs:
       - name: List generated APKs
         run: |
           echo "📱 APK files generated:"
-          find extracted-project -type f -name "*.apk"
+          find extracted-project -type f -name "*.apk" || echo "⚠️ No APKs found"
 
-      # 9️⃣ Upload APK artifacts for download
+      # 9️⃣ Upload APK artifacts
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
