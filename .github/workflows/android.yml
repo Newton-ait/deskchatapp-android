@@ -1,4 +1,4 @@
-name: Android Build - Final Fix
+name: Android Build - Version Matched
 
 on:
   push:
@@ -20,19 +20,21 @@ jobs:
         unzip -o -q GitSafe.zip
         echo "✅ Extraction complete"
         
-    - name: Setup Android environment
+    - name: Setup environment
       uses: android-actions/setup-android@v3
       
-    - name: Use system Gradle (no downloads)
+    - name: Install compatible Gradle version
       run: |
-        echo "🔧 Using system Gradle from Android setup..."
-        gradle --version
+        echo "📥 Installing Gradle 7.5 (compatible with modern AGP)..."
+        wget -q https://services.gradle.org/distributions/gradle-7.5-bin.zip
+        unzip -d /opt/gradle gradle-7.5-bin.zip
+        echo "/opt/gradle/gradle-7.5/bin" >> $GITHUB_PATH
         
-    - name: Create ultra-minimal build
+    - name: Create version-compatible build
       run: |
-        echo "🔧 Creating ultra-minimal build configuration..."
+        echo "🔧 Creating version-compatible build..."
         
-        # Ultra-minimal root build.gradle
+        # Root build.gradle with compatible AGP
         cat > build.gradle << 'EOF'
         buildscript {
             repositories {
@@ -40,34 +42,38 @@ jobs:
                 mavenCentral()
             }
             dependencies {
-                classpath "com.android.tools.build:gradle:4.2.2"
+                classpath "com.android.tools.build:gradle:7.4.2"
+                classpath "com.google.gms:google-services:4.3.15"
             }
         }
+        
         allprojects {
             repositories {
                 google()
                 mavenCentral()
             }
         }
+        
         task clean(type: Delete) {
             delete rootProject.buildDir
         }
         EOF
         
-        # Ultra-minimal app build.gradle - NO FIREBASE, NO COMPLEX DEPS
+        # App build.gradle with compatible configuration
         cat > app/build.gradle << 'EOF'
         plugins {
             id 'com.android.application'
+            id 'com.google.gms.google-services'
         }
         
         android {
-            compileSdk 30
-            buildToolsVersion "30.0.3"
+            compileSdk 33
+            namespace 'com.gitsafe.deskchat'
             
             defaultConfig {
                 applicationId "com.gitsafe.deskchat"
                 minSdk 21
-                targetSdk 30
+                targetSdk 33
                 versionCode 1
                 versionName "1.0"
             }
@@ -86,27 +92,31 @@ jobs:
         }
         
         dependencies {
-            implementation 'androidx.appcompat:appcompat:1.3.1'
-            implementation 'com.google.android.material:material:1.4.0'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.0'
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.9.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+            
+            // Basic Firebase without BOM
+            implementation 'com.google.firebase:firebase-analytics:21.3.0'
+            implementation 'com.google.firebase:firebase-messaging:23.2.1'
         }
         EOF
         
-        echo "✅ Created ultra-minimal build"
+        echo "✅ Created version-compatible build"
         
     - name: Accept Android licenses
       run: |
         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
         
-    - name: Build with system Gradle
+    - name: Build with compatible versions
       run: |
-        echo "🏗️ Building with system Gradle..."
-        gradle clean assembleDebug --no-daemon --stacktrace
+        echo "🏗️ Building with compatible versions..."
+        /opt/gradle/gradle-7.5/bin/gradle clean assembleDebug --no-daemon --stacktrace
         
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: deskchat-app
         path: app/build/outputs/apk/debug/*.apk
-        if-no-files-found: ignore
+        if-no-files-found: warn
         retention-days: 30
