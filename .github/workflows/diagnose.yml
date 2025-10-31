@@ -1,0 +1,57 @@
+name: Project Diagnosis
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Extract and analyze
+      run: |
+        echo "🔍 Deep Project Analysis..."
+        unzip -o -q GitSafe.zip
+        
+        echo "=== BUILD FILES ==="
+        echo "📄 Root build.gradle:"
+        cat build.gradle || echo "MISSING"
+        echo ""
+        echo "📄 App build.gradle:"
+        cat app/build.gradle || echo "MISSING"
+        echo ""
+        echo "📄 gradle.properties:"
+        cat gradle.properties || echo "MISSING"
+        echo ""
+        echo "📄 settings.gradle:"
+        cat settings.gradle || echo "MISSING"
+        
+        echo "=== SOURCE CODE ==="
+        echo "📁 Java files structure:"
+        find app/src -name "*.java" -type f | head -20
+        echo ""
+        echo "📁 Resource files:"
+        find app/src -name "*.xml" -type f | head -10
+        echo ""
+        echo "📁 Manifest:"
+        cat app/src/main/AndroidManifest.xml || echo "MISSING"
+        
+        echo "=== DEPENDENCIES ==="
+        echo "🔗 Detected dependencies in app/build.gradle:"
+        grep -E "implementation|classpath|api" app/build.gradle || echo "No dependencies found"
+        
+    - name: Upload full project analysis
+      uses: actions/upload-artifact@v4
+      with:
+        name: full-analysis
+        path: |
+          build.gradle
+          app/build.gradle
+          app/src/main/AndroidManifest.xml
+          gradle.properties
+          settings.gradle
+        retention-days: 30
