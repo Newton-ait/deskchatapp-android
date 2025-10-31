@@ -21,6 +21,8 @@ jobs:
         run: |
           mkdir -p extracted-project
           unzip -o GitSafe.zip -d extracted-project
+          echo "📂 Extracted structure:"
+          ls -R extracted-project | head -n 40
 
       # 3️⃣ Set up JDK 17
       - name: Set up JDK 17
@@ -33,7 +35,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # 5️⃣ Install Android SDK + Command-line tools
+      # 5️⃣ Install Android SDK
       - name: Install Android SDK
         run: |
           sudo apt-get update
@@ -49,28 +51,41 @@ jobs:
           yes | sdkmanager --licenses || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      # 6️⃣ Build Debug APK
+      # 6️⃣ Locate Gradle project folder
+      - name: Locate Gradle project
+        id: locate
+        run: |
+          ROOT=$(find extracted-project -name "gradlew" -type f | head -n 1)
+          if [ -z "$ROOT" ]; then
+            echo "❌ No gradlew file found!"
+            exit 1
+          fi
+          ROOT_DIR=$(dirname "$ROOT")
+          echo "Found project at: $ROOT_DIR"
+          echo "project_path=$ROOT_DIR" >> $GITHUB_OUTPUT
+
+      # 7️⃣ Build Debug APK
       - name: Build Debug APK
         run: |
           export ANDROID_SDK_ROOT=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
-          cd extracted-project/GitSafe
+          cd ${{ steps.locate.outputs.project_path }}
           chmod +x ./gradlew
           ./gradlew assembleDebug --stacktrace
 
-      # 7️⃣ Build Release APK
+      # 8️⃣ Build Release APK
       - name: Build Release APK
         run: |
           export ANDROID_SDK_ROOT=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
-          cd extracted-project/GitSafe
+          cd ${{ steps.locate.outputs.project_path }}
           ./gradlew assembleRelease --stacktrace
 
-      # 8️⃣ Upload APKs
+      # 9️⃣ Upload APKs
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: deskchat-apks
           path: |
-            extracted-project/GitSafe/app/build/outputs/apk/debug/*.apk
-            extracted-project/GitSafe/app/build/outputs/apk/release/*.apk
+            **/app/build/outputs/apk/debug/*.apk
+            **/app/build/outputs/apk/release/*.apk
