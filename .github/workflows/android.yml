@@ -1,4 +1,4 @@
-name: Android CI (Full Build - Gradlew Line Ending Fix)
+name: Android CI (Full Build - Fixed gradlew Execution)
 
 on:
   push:
@@ -12,66 +12,54 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout Repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Extract Project ZIP
-      - name: Extract GitSafe project
-        run: |
-          mkdir -p extracted-project
-          unzip -o GitSafe.zip -d extracted-project
-          echo "📂 Extracted structure:"
-          ls -lah extracted-project | head -30
+      - name: Extract project ZIP
+        run: unzip -o GitSafe.zip -d extracted-project
 
-      # 3️⃣ Set up JDK 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: 17
 
-      # 4️⃣ Install Android SDK
       - name: Install Android SDK
         run: |
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
           sudo apt-get update -qq
           sudo apt-get install -y wget unzip dos2unix
-          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          mkdir -p $HOME/android-sdk/cmdline-tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O sdk-tools.zip
-          unzip -q sdk-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
+          unzip -q sdk-tools.zip -d $HOME/android-sdk/cmdline-tools
+          mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
             "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
 
-      # 5️⃣ Fix gradlew permissions + line endings
       - name: Fix gradlew permissions and format
         run: |
           chmod +x extracted-project/gradlew
           dos2unix extracted-project/gradlew
           head -3 extracted-project/gradlew
 
-      # 6️⃣ Verify Gradle wrapper
-      - name: Verify Gradle wrapper
+      - name: 🧪 Test Gradlew
         run: |
           cd extracted-project
           ./gradlew --version
 
-      # 7️⃣ Build Debug APK
-      - name: Build Debug APK
+      - name: ⚙️ Build Debug APK
         run: |
           cd extracted-project
           ./gradlew assembleDebug --stacktrace
 
-      # 8️⃣ Build Release APK
-      - name: Build Release APK
+      - name: ⚙️ Build Release APK
         run: |
           cd extracted-project
           ./gradlew assembleRelease --stacktrace
 
-      # 9️⃣ Upload APKs
-      - name: Upload APKs
+      - name: 📦 Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: GitSafe-APKs
