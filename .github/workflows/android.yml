@@ -1,4 +1,4 @@
-name: Android CI (Full Build, Self-Healing)
+name: Android CI (Full Build)
 
 on:
   push:
@@ -20,59 +20,75 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: 17
+          distribution: 'temurin'
+          java-version: '17'
 
-      # 3️⃣ Extract ZIP (if your project is inside one)
-      - name: Extract GitSafe ZIP
+      # 3️⃣ Set up Android SDK
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # 4️⃣ Extract or prepare project
+      - name: Extract or prepare project
         run: |
-          echo "📦 Extracting GitSafe.zip..."
-          mkdir extracted-project
-          unzip -q GitSafe.zip -d extracted-project
+          echo "📦 Preparing project..."
+          mkdir -p extracted-project
+          if [ -f GitSafe.zip ]; then
+            echo "🧩 Extracting GitSafe.zip..."
+            unzip -q GitSafe.zip -d extracted-project
+          else
+            echo "📁 Copying repository files..."
+            rsync -av --exclude='extracted-project' --exclude='.git' ./ extracted-project/
+          fi
 
-      # 4️⃣ Detect Gradle wrapper directory
-      - name: Detect Gradle wrapper location
+      # 5️⃣ Auto-detect Gradle project folder
+      - name: Detect project folder
         id: detect
         run: |
-          echo "🔍 Searching for gradlew..."
-          WRAPPER_PATH=$(find extracted-project -type f -name "gradlew" | head -n 1)
-          if [ -z "$WRAPPER_PATH" ]; then
-            echo "❌ gradlew not found!"; exit 1;
-          fi
-          WRAPPER_DIR=$(dirname "$WRAPPER_PATH")
-          echo "✅ Found gradlew in: $WRAPPER_DIR"
-          echo "wrapper_dir=$WRAPPER_DIR" >> $GITHUB_OUTPUT
+          cd extracted-project
+          PROJECT_DIR=$(find . -type f -name "gradlew" -exec dirname {} \; | head -n 1)
+          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
+          echo "✅ Detected project directory: $PROJECT_DIR"
 
-      # 5️⃣ Verify Gradle wrapper (safe and self-healing)
-      - name: Verify Gradle wrapper
+      # 6️⃣ Ensure gradlew is executable
+      - name: Make gradlew executable
         run: |
-          cd "${{ steps.detect.outputs.wrapper_dir }}"
-          echo "🧩 Verifying Gradle wrapper..."
+          cd extracted-project/${{ steps.detect.outputs.project_dir }}
           chmod +x gradlew
-          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            echo "⚠️ gradle-wrapper.jar missing — restoring official version..."
+
+      # 7️⃣ Verify Gradle Wrapper (✅ uses correct jar)
+      - name: Verify Gradle Wrapper
+        run: |
+          cd extracted-project/${{ steps.detect.outputs.project_dir }}
+          echo "🧩 Verifying Gradle wrapper..."
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "⚠️ gradle-wrapper.jar missing — restoring official one..."
             mkdir -p gradle/wrapper
             curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \
-              https://services.gradle.org/distributions/gradle-8.7-bin.zip
-            echo "✅ Official Gradle wrapper JAR restored."
-          else
-            echo "✅ gradle-wrapper.jar found:"
-            ls -lh gradle/wrapper/gradle-wrapper.jar
+              https://raw.githubusercontent.com/gradle/gradle/master/gradle/wrapper/gradle-wrapper.jar
           fi
           ./gradlew --version
 
-      # 6️⃣ Build Debug & Release APKs
+      # 8️⃣ Build Debug & Release APKs
       - name: Build Debug and Release APKs
         run: |
-          cd "${{ steps.detect.outputs.wrapper_dir }}"
+          cd extracted-project/${{ steps.detect.outputs.project_dir }}
           echo "🚀 Building APKs..."
-          ./gradlew clean assembleDebug assembleRelease --stacktrace
+          ./gradlew clean assembleDebug assembleRelease
 
-      # 7️⃣ Upload build artifacts
-      - name: Upload APKs
+      # 9️⃣ Upload APKs as artifacts
+      - name: Upload built APKs
         uses: actions/upload-artifact@v4
         with:
-          name: GitSafe-APKs
+          name: all-apks
           path: |
-            ${{ steps.detect.outputs.wrapper_dir }}/app/build/outputs/apk/debug/*.apk
-            ${{ steps.detect.outputs.wrapper_dir }}/app/build/outputs/apk/release/*.apk
+            extracted-project/${{ steps.detect.outputs.project_dir }}/**/build/outputs/**/*.apk
+
+      # 🔟 CI Summary
+      - name: CI Summary
+        run: |
+          echo "--------------------------------------"
+          echo "✅ Android CI Finished Successfully"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Branch: $GITHUB_REF_NAME"
+          echo "Project: ${{ steps.detect.outputs.project_dir }}"
+          echo "--------------------------------------"
