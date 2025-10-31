@@ -7,25 +7,87 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
-    - name: Checkout
+    - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Extract
-      run: unzip -o -q GitSafe.zip
-      
-    - name: Setup Android
+    - name: Extract project
+      run: |
+        echo "📦 Extracting GitSafe.zip..."
+        rm -rf app gradle 2>/dev/null || true
+        rm -f *.gradle gradlew* 2>/dev/null || true
+        unzip -o -q GitSafe.zip
+        echo "✅ Extraction complete"
+        
+    - name: Setup environment
       uses: android-actions/setup-android@v3
       
-    - name: Build with wrapper
+    - name: Add Google Services to root build.gradle
       run: |
-        chmod +x gradlew
+        echo "🔧 Adding Google Services plugin..."
+        # Add Google Services classpath to root build.gradle
+        if ! grep -q "com.google.gms:google-services" build.gradle; then
+          sed -i '/dependencies {/a\        classpath "com.google.gms:google-services:4.4.0"' build.gradle
+          echo "✅ Added Google Services classpath"
+        else
+          echo "✅ Google Services already present"
+        fi
+        
+        # Ensure google() repository is in buildscript
+        if ! grep -q "google()" build.gradle; then
+          sed -i '/repositories {/a\        google()' build.gradle
+          echo "✅ Added google() repository"
+        fi
+        
+    - name: Apply Google Services plugin in app build.gradle
+      run: |
+        echo "🔧 Applying Google Services plugin..."
+        # Add apply plugin at the bottom of app/build.gradle if not present
+        if ! grep -q "apply plugin.*google-services" app/build.gradle; then
+          echo "" >> app/build.gradle
+          echo "apply plugin: 'com.google.gms.google-services'" >> app/build.gradle
+          echo "✅ Applied Google Services plugin"
+        else
+          echo "✅ Google Services plugin already applied"
+        fi
+        
+    - name: Make gradlew executable
+      run: chmod +x ./gradlew
+      
+    - name: Accept Android licenses
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        
+    - name: Build Debug APK
+      run: |
+        echo "🏗️ Building Debug APK..."
         ./gradlew clean assembleDebug --no-daemon --stacktrace
+        
+    - name: Check build results
+      run: |
+        echo "🔍 Checking build outputs..."
+        if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+          echo "🎉 SUCCESS: APK built successfully!"
+          ls -la app/build/outputs/apk/debug/
+        else
+          echo "❌ No APK found. Build outputs:"
+          find app/build/ -name "*.apk" -o -name "*.aab" 2>/dev/null || echo "No APK files found"
+        fi
         
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: apk-result
+        name: deskchat-apk
         path: app/build/outputs/apk/debug/*.apk
         if-no-files-found: ignore
+        retention-days: 30
+        
+    - name: Build report
+      run: |
+        echo "📊 Final Build Report:"
+        echo "✅ Project: DeskChat with Firebase & Dagger Hilt"
+        echo "✅ Dependencies: Firebase BOM, Analytics, Messaging, Dagger Hilt"
+        echo "✅ Fixed: Google Services plugin configuration"
+        echo "📱 Result: $(if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then echo 'SUCCESS'; else echo 'FAILED'; fi)"
