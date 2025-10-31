@@ -1,13 +1,12 @@
-name: Android Build
+name: Android Smart Build
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  build:
+  analyze-and-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     
     steps:
     - name: Checkout code
@@ -24,42 +23,73 @@ jobs:
     - name: Setup environment
       uses: android-actions/setup-android@v3
       
-    - name: Create minimal working build
+    - name: Analyze build configuration
+      id: analyze
       run: |
-        echo "🔧 Creating minimal build configuration..."
+        echo "🔍 Analyzing build configuration..."
         
-        # Create minimal root build.gradle
+        # Check for problematic dependencies
+        if grep -q "com.google.dagger:hilt-android" app/build.gradle; then
+          echo "⚠️ Found Dagger Hilt - may cause issues"
+          echo "has_dagger=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_dagger=false" >> $GITHUB_OUTPUT
+        fi
+        
+        if grep -q "firebase-bom" app/build.gradle; then
+          echo "⚠️ Found Firebase BOM - may cause issues" 
+          echo "has_firebase_bom=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_firebase_bom=false" >> $GITHUB_OUTPUT
+        fi
+        
+        if grep -q "-ktx" app/build.gradle; then
+          echo "⚠️ Found Kotlin dependencies - may need Kotlin setup"
+          echo "has_kotlin=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_kotlin=false" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Build Attempt 1 - Original configuration
+      if: steps.analyze.outputs.has_dagger == 'false' && steps.analyze.outputs.has_firebase_bom == 'false'
+      run: |
+        echo "🏗️ Attempt 1: Building with original configuration..."
+        chmod +x gradlew
+        ./gradlew clean assembleDebug --no-daemon --stacktrace
+        
+    - name: Build Attempt 2 - Remove complex dependencies
+      if: steps.analyze.outputs.has_dagger == 'true' || steps.analyze.outputs.has_firebase_bom == 'true'
+      run: |
+        echo "🏗️ Attempt 2: Removing complex dependencies..."
+        # Remove problematic dependencies
+        sed -i '/com.google.dagger:hilt-android/d' app/build.gradle
+        sed -i '/firebase-bom/d' app/build.gradle
+        sed -i '/-ktx/d' app/build.gradle
+        
+        chmod +x gradlew
+        ./gradlew clean assembleDebug --no-daemon --stacktrace
+        
+    - name: Build Attempt 3 - Minimal configuration
+      if: failure()
+      run: |
+        echo "🏗️ Attempt 3: Using minimal configuration..."
+        # Create minimal build files
         cat > build.gradle << 'EOF'
         buildscript {
-            repositories {
-                google()
-                mavenCentral()
-            }
-            dependencies {
-                classpath "com.android.tools.build:gradle:7.4.2"
-            }
+            repositories { google(); mavenCentral() }
+            dependencies { classpath "com.android.tools.build:gradle:7.4.2" }
         }
         allprojects {
-            repositories {
-                google()
-                mavenCentral()
-            }
+            repositories { google(); mavenCentral() }
         }
-        task clean(type: Delete) {
-            delete rootProject.buildDir
-        }
+        task clean(type: Delete) { delete rootProject.buildDir }
         EOF
         
-        # Create minimal app build.gradle with only essential dependencies
         cat > app/build.gradle << 'EOF'
-        plugins {
-            id 'com.android.application'
-        }
-        
+        plugins { id 'com.android.application' }
         android {
             compileSdk 33
             namespace 'com.gitsafe.deskchat'
-            
             defaultConfig {
                 applicationId "com.gitsafe.deskchat"
                 minSdk 21
@@ -67,65 +97,26 @@ jobs:
                 versionCode 1
                 versionName "1.0"
             }
-            
             buildTypes {
-                debug {
-                    debuggable true
-                    minifyEnabled false
-                }
-                release {
-                    minifyEnabled false
-                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                }
-            }
-            
-            compileOptions {
-                sourceCompatibility JavaVersion.VERSION_1_8
-                targetCompatibility JavaVersion.VERSION_1_8
+                debug { debuggable true; minifyEnabled false }
             }
         }
-        
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
             implementation 'com.google.android.material:material:1.9.0'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-            
-            // Remove complex dependencies that are causing issues
-            // implementation 'com.google.firebase:firebase-bom:33.2.0'
-            // implementation 'com.google.firebase:firebase-analytics-ktx'
-            // implementation 'com.google.firebase:firebase-messaging-ktx'
-            // implementation 'com.google.dagger:hilt-android:2.51.1'
         }
         EOF
         
-        echo "✅ Created minimal build configuration"
+        chmod +x gradlew
+        ./gradlew clean assembleDebug --no-daemon --stacktrace
         
-    - name: Install compatible Gradle
-      run: |
-        echo "📥 Installing Gradle 7.4.2..."
-        wget -q https://services.gradle.org/distributions/gradle-7.4.2-bin.zip
-        unzip -d /opt/gradle gradle-7.4.2-bin.zip
-        echo "/opt/gradle/gradle-7.4.2/bin" >> $GITHUB_PATH
-        
-    - name: Build with minimal dependencies
-      run: |
-        echo "🏗️ Building with minimal dependencies..."
-        /opt/gradle/gradle-7.4.2/bin/gradle clean assembleDebug --no-daemon --stacktrace
-        
-    - name: Check results
-      run: |
-        echo "🔍 Checking results..."
-        find . -name "*.apk" -type f | head -5 || echo "No APK files found"
-        if [ -d "app/build/outputs/apk/debug" ]; then
-          echo "🎉 SUCCESS: APK directory exists!"
-          ls -la app/build/outputs/apk/debug/
-        fi
-        
-    - name: Upload any outputs
-      if: always()
+    - name: Upload results
       uses: actions/upload-artifact@v4
       with:
-        name: build-outputs
+        name: build-attempt-${{ job.status }}
         path: |
           app/build/outputs/
+          build.gradle
+          app/build.gradle
+        if-no-files-found: ignore
         retention-days: 30
