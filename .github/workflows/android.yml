@@ -15,10 +15,19 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       
+    - name: Clean workspace before extraction
+      run: |
+        echo "🧹 Cleaning workspace..."
+        # Remove any files that might conflict with the ZIP extraction
+        rm -f gradlew gradlew.bat
+        rm -f build.gradle settings.gradle gradle.properties
+        rm -rf app gradle
+        echo "✅ Workspace cleaned"
+        
     - name: Extract Android project
       run: |
         echo "📦 Extracting GitSafe.zip..."
-        unzip -q GitSafe.zip
+        unzip -o -q GitSafe.zip
         echo "✅ Project extracted successfully"
         
     - name: Set up JDK 17
