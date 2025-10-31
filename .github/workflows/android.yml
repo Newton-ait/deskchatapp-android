@@ -1,4 +1,4 @@
-name: Android CI (No Wrapper Build)
+name: Android CI (Updated Gradle Setup)
 
 on:
   push:
@@ -14,46 +14,34 @@ jobs:
       - name: 📦 Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🧰 Set up JDK 17
+      - name: ☕ Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: 🗜️ Extract GitSafe project
+      - name: 📂 Extract project ZIP
         run: |
           echo "🔍 Extracting GitSafe.zip..."
-          unzip -o GitSafe.zip -d extracted-project
-          echo "✅ Extraction complete"
-          ls -R extracted-project || true
+          unzip -q GitSafe.zip -d extracted-project
 
-      - name: 🧭 Locate Gradle project
-        id: find_gradle
+      - name: 🧭 Move to project directory
         run: |
-          ROOT_PATH=$(find extracted-project -name "settings.gradle" -o -name "settings.gradle.kts" | head -n 1)
-          if [ -z "$ROOT_PATH" ]; then
-            echo "❌ Could not find settings.gradle file."
-            exit 1
-          fi
-          PROJECT_DIR=$(dirname "$ROOT_PATH")
-          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
-          echo "✅ Found project at: $PROJECT_DIR"
+          cd extracted-project/GitSafe
+          ls -al
 
-      - name: ⚙️ Install Gradle (system-level)
-        uses: gradle/gradle-build-action@v3
+      - name: ⚙️ Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
 
-      - name: 🏗️ Build Debug & Release APKs
-        run: |
-          cd "${{ steps.find_gradle.outputs.project_dir }}"
-          echo "🚀 Building APKs..."
-          gradle clean assembleDebug assembleRelease --stacktrace
+      - name: 🏗️ Build APKs
+        working-directory: extracted-project/GitSafe
+        run: ./gradlew clean assembleDebug assembleRelease --stacktrace
 
-      - name: 📦 Upload APK artifacts
+      - name: 📤 Upload APKs
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: DeskChat-APKs
-          path: |
-            **/app/build/outputs/apk/debug/*.apk
-            **/app/build/outputs/apk/release/*.apk
+          name: APKs
+          path: extracted-project/GitSafe/app/build/outputs/apk/
