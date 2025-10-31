@@ -18,8 +18,7 @@ jobs:
     - name: Clean workspace before extraction
       run: |
         echo "🧹 Cleaning workspace..."
-        # Remove any files that might conflict with the ZIP extraction
-        rm -f gradlew gradlew.bat
+        rm -f gradlew gradlew.bat gradle-wrapper.jar
         rm -f build.gradle settings.gradle gradle.properties
         rm -rf app gradle
         echo "✅ Workspace cleaned"
@@ -36,21 +35,23 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
         
-    - name: Setup Android SDK
+    - name: Setup Android SDK and Gradle
       uses: android-actions/setup-android@v3
       
-    - name: Make gradlew executable
-      run: chmod +x ./gradlew
-      
-    - name: Build Debug APK
+    - name: Install working Gradle
       run: |
-        echo "🏗️ Building Debug APK..."
-        ./gradlew assembleDebug --no-daemon --stacktrace
+        echo "📥 Installing working Gradle version..."
+        # Remove corrupted wrapper
+        rm -f gradle/wrapper/gradle-wrapper.jar
+        # Use system gradle from Android setup
+        gradle --version
         
-    - name: Build Release APK
+    - name: Build with system Gradle
       run: |
-        echo "🏗️ Building Release APK..."
-        ./gradlew assembleRelease --no-daemon --stacktrace
+        echo "🏗️ Building with system Gradle..."
+        # Use the gradle command directly (from Android setup)
+        gradle assembleDebug --no-daemon --stacktrace
+        gradle assembleRelease --no-daemon --stacktrace
         
     - name: Upload APK Artifacts
       uses: actions/upload-artifact@v4
@@ -66,4 +67,4 @@ jobs:
         echo "🎉 Android Build Completed Successfully!"
         echo "📱 APK files are available in the Artifacts section"
         echo "📦 Project: DeskChat"
-        echo "🔧 Built from: GitSafe.zip"
+        echo "🔧 Built using system Gradle"
