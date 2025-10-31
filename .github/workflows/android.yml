@@ -1,4 +1,4 @@
-name: Android Build - Fix All XML
+name: Android Build - Capture Errors
 
 on:
   push:
@@ -20,41 +20,13 @@ jobs:
         unzip -o -q GitSafe.zip
         echo "✅ Extraction complete"
         
-    - name: Fix ALL XML resource files
+    - name: Verify XML files are fixed
       run: |
-        echo "🔧 Fixing ALL XML resource files..."
-        
-        # Find and fix ALL XML files in res directory
-        find app/src/main/res -name "*.xml" -type f | while read file; do
-          echo "🔍 Checking: $file"
-          
-          # Fix invalid XML declaration
-          if head -1 "$file" | grep -q "<?xml"; then
-            echo "📝 Fixing XML declaration in $(basename $file)"
-            sed -i '1s/.*/<?xml version="1.0" encoding="utf-8"?>/' "$file"
-          fi
-          
-          # Add missing app namespace if needed
-          if grep -q 'app:' "$file" && ! grep -q 'xmlns:app="http://schemas.android.com/apk/res-auto"' "$file"; then
-            echo "➕ Adding app namespace to $(basename $file)"
-            sed -i 's|xmlns:android="http://schemas.android.com/apk/res/android"|xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:app="http://schemas.android.com/apk/res-auto"|' "$file"
-          fi
-          
-          # Add missing tools namespace if needed
-          if grep -q 'tools:' "$file" && ! grep -q 'xmlns:tools="http://schemas.android.com/tools"' "$file"; then
-            echo "➕ Adding tools namespace to $(basename $file)"
-            sed -i 's|xmlns:android="http://schemas.android.com/apk/res/android"|xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:tools="http://schemas.android.com/tools"|' "$file"
-          fi
-        done
-        
-        echo "✅ All XML files checked and fixed"
-        
-        # Verify the problematic files are fixed
-        echo "🔍 Verifying fixes..."
-        if [ -f "app/src/main/res/layout/item_nearby_desk.xml" ]; then
-          echo "📄 item_nearby_desk.xml first line:"
-          head -1 "app/src/main/res/layout/item_nearby_desk.xml"
-        fi
+        echo "🔍 Verifying XML files..."
+        echo "activity_nearby_desks.xml first line:"
+        head -1 app/src/main/res/layout/activity_nearby_desks.xml || echo "File not found"
+        echo "item_nearby_desk.xml first line:"
+        head -1 app/src/main/res/layout/item_nearby_desk.xml || echo "File not found"
         
     - name: Setup environment
       uses: android-actions/setup-android@v3
@@ -96,36 +68,34 @@ jobs:
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
             implementation 'com.google.android.material:material:1.9.0'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-            implementation 'com.airbnb.android:lottie:6.1.0'
         }
         EOF
         
     - name: Accept licenses
       run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
         
-    - name: Build with all XML fixes
+    - name: Build and capture full error
       run: |
-        echo "🏗️ Building with all XML fixes..."
-        /opt/gradle/gradle-7.5/bin/gradle clean assembleDebug --no-daemon --stacktrace
+        echo "🏗️ Building with full error capture..."
+        /opt/gradle/gradle-7.5/bin/gradle clean assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log || echo "Build failed but continuing"
         
-    - name: Upload APK
+        echo "📄 Build log saved. Checking for errors..."
+        grep -A 10 -B 5 "error\|Error\|ERROR\|FAILED\|failed\|Exception\|exception" build.log | head -50 || echo "No obvious errors found in log"
+        
+    - name: Upload build log
       uses: actions/upload-artifact@v4
       with:
-        name: deskchat-app
-        path: app/build/outputs/apk/debug/*.apk
-        if-no-files-found: warn
+        name: build-log
+        path: build.log
         retention-days: 30
         
-    - name: Final success check
+    - name: Check what was built anyway
       run: |
-        if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-          echo "🎉 🎉 🎉 BUILD SUCCESSFUL! 🎉 🎉 🎉"
-          echo "📱 APK Size: $(ls -lh app/build/outputs/apk/debug/app-debug.apk | awk '{print $5}')"
-          echo "✅ All XML resource errors fixed"
-          echo "✅ APK ready for download in artifacts"
-        else
-          echo "❌ Build failed - no APK generated"
-          echo "📁 Checking what was built:"
-          find app/build/ -name "*.apk" -o -name "*.aab" 2>/dev/null || echo "No APK/AAB files found"
+        echo "🔍 Checking build outputs regardless of success..."
+        find . -name "*.apk" -type f | head -5 || echo "No APK files"
+        find app/build/ -name "*.dex" -o -name "*.class" | head -5 || echo "No compiled files"
+        
+        if [ -d "app/build/intermediates" ]; then
+          echo "📦 Intermediate files exist - compilation happened"
+          find app/build/intermediates/ -name "*.xml" -o -name "*.dex" | head -10
         fi
