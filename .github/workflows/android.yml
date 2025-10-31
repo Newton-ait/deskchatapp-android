@@ -10,8 +10,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      GRADLE_VERSION: 8.7
 
     steps:
       - name: Checkout repository
@@ -26,93 +24,45 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Extract or prepare project
+      # ✅ Extract and use the project’s own gradle-wrapper.jar
+      - name: Extract ZIP project
         run: |
-          if [ -f deskchatapp-android.zip ]; then
-            echo "📦 Extracting ZIP..."
-            mkdir -p extracted-project
-            unzip -q deskchatapp-android.zip -d extracted-project
-          else
-            echo "📁 Copying repo contents..."
-            mkdir -p extracted-project
-            rsync -av --exclude='extracted-project' --exclude='.git' ./ extracted-project/
-          fi
+          echo "📦 Extracting project..."
+          mkdir -p extracted-project
+          unzip -q GitSafe.zip -d extracted-project
 
-      # ---------------------------
-      # Restore Gradle Wrapper JAR
-      # ---------------------------
-      # Download the official Gradle distribution ZIP and extract the gradle-wrapper.jar
-      - name: Restore Gradle Wrapper JAR (from Gradle distribution)
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
+          echo "✅ Extracted structure:"
+          ls -R extracted-project | head -n 50
 
-          VERSION="${GRADLE_VERSION:-8.7}"
-          DIST="gradle-${VERSION}-bin.zip"
-          DIST_URL="https://services.gradle.org/distributions/${DIST}"
-
-          echo "🔽 Downloading Gradle distribution: $DIST_URL"
-          # use curl -fSL so non-2xx fails the step
-          curl -fSL "$DIST_URL" -o "$DIST" || { echo "❌ Failed to download $DIST_URL"; exit 2; }
-
-          echo "📦 Extracting gradle-wrapper.jar from $DIST"
-          unzip -q "$DIST" -d gradle-dist-temp
-
-          # find the extracted gradle-wrapper.jar, copy to the project's wrapper folder
-          SRC_JAR=$(find gradle-dist-temp -type f -path "*/lib/gradle-wrapper.jar" | head -n1)
-          if [ -z "$SRC_JAR" ]; then
-            echo "❌ Could not find gradle-wrapper.jar inside distribution"; ls -R gradle-dist-temp; exit 3
-          fi
-
-          mkdir -p extracted-project/gradle/wrapper
-          cp -f "$SRC_JAR" extracted-project/gradle/wrapper/gradle-wrapper.jar
-          echo "✅ Copied gradle-wrapper.jar to extracted-project/gradle/wrapper/"
-
-          # cleanup
-          rm -rf gradle-dist-temp "$DIST"
-          echo "✅ Restore step complete"
-          
-      - name: Make gradlew executable
+      # ✅ Make gradlew executable and verify wrapper
+      - name: Prepare Gradle Wrapper
         run: |
           cd extracted-project
-          if [ -f gradlew ]; then
-            chmod +x gradlew
-            echo "gradlew is present and made executable"
-          else
-            echo "⚠️ gradlew script not found in project root. If you don't have gradlew, consider adding it or run 'gradle wrapper' locally."
-            # do not exit here; depending on project, gradlew may be present after other steps
-          fi
-          file extracted-project/gradle/wrapper/gradle-wrapper.jar || true
-
-      - name: Verify Gradle Wrapper
-        run: |
-          cd extracted-project
-          echo "🧩 Verifying Gradle wrapper..."
-          # If gradlew exists, run it; otherwise use java -jar to check the wrapper jar presence
-          if [ -x ./gradlew ]; then
-            ./gradlew --version
-          else
-            echo "⚠️ gradlew not executable or not found; checking wrapper JAR..."
-            if [ -f gradle/wrapper/gradle-wrapper.jar ]; then
-              echo "gradle-wrapper.jar exists; attempting to run wrapper via 'java -cp' fallback"
-              # basic check — prints jar manifest
-              java -jar gradle/wrapper/gradle-wrapper.jar --version || true
-            else
-              echo "❌ gradle-wrapper.jar missing; cannot verify wrapper"
-              exit 4
-            fi
+          if [ ! -f gradlew ]; then
+            echo "❌ gradlew script missing in ZIP root."
+            exit 1
           fi
 
+          chmod +x gradlew
+          echo "🧩 Checking Gradle wrapper JAR..."
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "❌ gradle-wrapper.jar missing. Please verify your ZIP contents."
+            exit 1
+          fi
+          echo "✅ gradle-wrapper.jar found:"
+          ls -lh gradle/wrapper/gradle-wrapper.jar
+          file gradle/wrapper/gradle-wrapper.jar
+
+          echo "🧩 Verifying Gradle version..."
+          ./gradlew --version
+
+      # 🏗️ Build APKs
       - name: Build Debug and Release APKs
         run: |
           cd extracted-project
-          if [ -x ./gradlew ]; then
-            ./gradlew clean assembleDebug assembleRelease --no-daemon
-          else
-            echo "❌ gradlew script missing; aborting build (please include gradlew in repo or run 'gradle wrapper' locally)."
-            exit 5
-          fi
+          ./gradlew clean assembleDebug assembleRelease --no-daemon
 
+      # 📦 Upload APKs
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
@@ -120,10 +70,11 @@ jobs:
           path: |
             extracted-project/**/build/outputs/**/*.apk
 
+      # 🧾 Summary
       - name: CI Summary
         run: |
           echo "--------------------------------------"
-          echo "✅ Android CI Finished (or failed with explicit message)"
+          echo "✅ Android CI Finished Successfully"
           echo "Repository: $GITHUB_REPOSITORY"
           echo "Branch: $GITHUB_REF_NAME"
           echo "--------------------------------------"
