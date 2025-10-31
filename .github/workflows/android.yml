@@ -23,15 +23,22 @@ jobs:
         fi
         echo "✅ GitSafe.zip found"
         
+    - name: Clean extraction directory
+      run: |
+        echo "🧹 Preparing clean workspace..."
+        # Remove any existing extracted files to avoid conflicts
+        find . -maxdepth 1 -type f -name "gradlew*" -delete
+        find . -maxdepth 1 -type f -name "*.gradle" -delete
+        rm -rf app/ gradle/ 2>/dev/null || true
+        
     - name: Extract Android project
       run: |
         echo "📂 Extracting GitSafe.zip..."
-        unzip -q GitSafe.zip
+        # Force overwrite all files without prompting
+        unzip -o -q GitSafe.zip
         echo "✅ Extraction complete"
         echo "📁 Current directory structure:"
         ls -la
-        echo "📁 App directory contents:"
-        ls -la app/ || echo "⚠️ No app directory found at root"
         
     - name: Set up JDK 17
       uses: actions/setup-java@v3
