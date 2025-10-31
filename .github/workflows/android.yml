@@ -40,20 +40,26 @@ jobs:
             rsync -av --exclude='extracted-project' --exclude='.git' ./ extracted-project/
           fi
 
-      # 5️⃣ Make gradlew executable
+      # 5️⃣ Fix Gradle wrapper JAR path
+      - name: Fix Gradle wrapper structure
+        run: |
+          mkdir -p extracted-project/gradle/wrapper
+          if [ -f extracted-project/gradle-wrapper.jar ]; then
+            echo "📦 Moving gradle-wrapper.jar into gradle/wrapper/..."
+            mv extracted-project/gradle-wrapper.jar extracted-project/gradle/wrapper/
+          else
+            echo "⚠️ gradle-wrapper.jar not found in root, skipping move."
+          fi
+          ls -R extracted-project/gradle/wrapper || echo "⚠️ gradle/wrapper missing!"
+
+      # 6️⃣ Make gradlew executable
       - name: Make gradlew executable
         run: |
           cd extracted-project
           chmod +x gradlew
           file gradlew
 
-      # 6️⃣ Locate gradle-wrapper.jar
-      - name: Locate Gradle wrapper jar
-        run: |
-          echo "🔍 Searching for gradle-wrapper.jar..."
-          find extracted-project -name "gradle-wrapper.jar" || echo "⚠️ Not found!"
-
-      # 7️⃣ Build using Gradle wrapper (no cd into wrapper)
+      # 7️⃣ Build with Gradle wrapper
       - name: Build Debug and Release APKs
         run: |
           cd extracted-project
@@ -62,7 +68,7 @@ jobs:
           ./gradlew assembleDebug
           ./gradlew assembleRelease
 
-      # 8️⃣ List APKs
+      # 8️⃣ List generated APKs
       - name: List generated APKs
         run: |
           echo "📱 APK files generated:"
