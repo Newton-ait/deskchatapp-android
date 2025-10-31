@@ -27,7 +27,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # 4️⃣ Extract project if zipped (handles both cases)
+      # 4️⃣ Extract or prepare project
       - name: Extract or prepare project
         run: |
           if [ -f deskchatapp-android.zip ]; then
@@ -40,21 +40,20 @@ jobs:
             rsync -av --exclude='extracted-project' --exclude='.git' ./ extracted-project/
           fi
 
-      # 5️⃣ Grant execute permission to Gradle wrapper
+      # 5️⃣ Make gradlew executable
       - name: Make gradlew executable
         run: |
           cd extracted-project
           chmod +x gradlew
-          file gradlew || true
+          file gradlew
 
-      # 6️⃣ Verify Gradle wrapper JAR
-      - name: Verify Gradle wrapper JAR
+      # 6️⃣ Locate gradle-wrapper.jar
+      - name: Locate Gradle wrapper jar
         run: |
-          cd extracted-project/gradle/wrapper
-          ls -l
-          jar tf gradle-wrapper.jar | head -n 10 || echo "⚠️ Unable to inspect gradle-wrapper.jar"
+          echo "🔍 Searching for gradle-wrapper.jar..."
+          find extracted-project -name "gradle-wrapper.jar" || echo "⚠️ Not found!"
 
-      # 7️⃣ Build project using Gradle wrapper
+      # 7️⃣ Build using Gradle wrapper (no cd into wrapper)
       - name: Build Debug and Release APKs
         run: |
           cd extracted-project
@@ -63,13 +62,13 @@ jobs:
           ./gradlew assembleDebug
           ./gradlew assembleRelease
 
-      # 8️⃣ List APK outputs
+      # 8️⃣ List APKs
       - name: List generated APKs
         run: |
           echo "📱 APK files generated:"
           find extracted-project -type f -name "*.apk" || echo "⚠️ No APKs found"
 
-      # 9️⃣ Upload APK artifacts
+      # 9️⃣ Upload APKs
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -89,5 +88,4 @@ jobs:
           echo "✅ Android CI Summary"
           echo "Repository: $GITHUB_REPOSITORY"
           echo "Branch: $GITHUB_REF_NAME"
-          echo "Status: success"
           echo "--------------------------------------"
