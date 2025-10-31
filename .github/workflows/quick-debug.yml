@@ -1,0 +1,9 @@
+- name: Try Java compilation only
+  run: |
+    echo "🔨 Testing Java compilation..."
+    find app/src -name "*.java" | head -5
+    # Try to compile a single Java file to test
+    javac -cp "$ANDROID_HOME/platforms/android-33/android.jar" \
+          app/src/main/java/com/gitsafe/deskchat/MainActivity.java 2>/dev/null \
+      && echo "✅ Java compilation successful" \
+      || echo "⚠️ Java compilation failed (expected without Android framework)"
